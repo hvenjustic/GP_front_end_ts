@@ -79,8 +79,10 @@ const toneColor: Record<string, string> = {
   slate: 'text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50'
 };
 
-const Card = ({ children }: { children: ReactNode }) => (
-  <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
+const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
+  <div
+    className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
+  >
     {children}
   </div>
 );
@@ -163,8 +165,8 @@ export default function AgentConsole() {
   };
 
   return (
-    <div className="relative isolate px-6 pb-0">
-      <section className="mx-auto mt-4 max-w-[108rem] overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-lg backdrop-blur md:p-8 dark:border-white/10 dark:bg-slate-900/80">
+    <div className="relative isolate h-[calc(100vh-80px)] overflow-hidden px-6 pb-0">
+      <section className="mx-auto mt-4 flex h-full max-w-[108rem] flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-lg backdrop-blur md:p-8 dark:border-white/10 dark:bg-slate-900/80">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200">
@@ -193,7 +195,7 @@ export default function AgentConsole() {
           </p>
         </div>
 
-        <div className="mt-6 grid h-[calc(100vh-200px)] gap-4 overflow-hidden md:grid-cols-4">
+        <div className="mt-6 grid flex-1 min-h-0 gap-4 md:grid-cols-4">
           {/* 执行进度 */}
           <div className="space-y-4 overflow-y-auto pr-1 md:col-span-1">
             <Card>
@@ -315,8 +317,8 @@ export default function AgentConsole() {
           </div>
 
           {/* 聊天交互（占 1/2，右侧全高） */}
-          <div className="md:col-span-2">
-            <Card>
+          <div className="md:col-span-2 flex min-h-0">
+            <Card className="h-full">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
                   <FiMessageCircle className="h-4 w-4 text-indigo-500" />
@@ -326,7 +328,7 @@ export default function AgentConsole() {
                   Chat
                 </span>
               </div>
-              <div className="flex h-[calc(100vh-260px)] flex-col">
+              <div className="flex h-full min-h-0 flex-col">
                 <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
                   {messages.map((msg, idx) => (
                     <div key={`${msg.role}-${idx}`} className={`flex ${msg.role === 'agent' ? 'justify-end' : 'justify-start'}`}>
