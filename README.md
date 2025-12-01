@@ -1,19 +1,28 @@
-# Context-starter Template
+# 知识图谱电商系统（毕业设计）
 
-基于当前项目的 UI Shell 抽取出的无登录版本，便于快速起盘。
+一个基于知识图谱的电商平台，实现基础购物流程，并加入智能 Agent 的商品运营与对话式咨询体验。
 
-## 使用方式
-1. 复制 `template` 目录作为新项目根目录。
-2. 使用 Node.js 22（`.nvmrc` 已提供），运行 `nvm use` 或自行切换到 22.x。
-3. 运行 `npm install` 安装依赖。
-4. 执行 `npm run dev` 启动开发环境（Next.js App Router + TailwindCSS v4）。
-5. 按需修改 `src/app/page.tsx` 的示例区块和 `src/components/navBar/Navbar.tsx` 的导航配置。
+## 项目简介
+- 电商功能：商品浏览、搜索、购物车、下单等核心流程。
+- 知识图谱：以商品属性、品牌、品类等实体关系为底层数据结构，支持智能关联推荐。
+- 管理员 Agent：自动管理商品信息、自动上架和库存维护，减少人工运营成本。
+- 用户对话：内置聊天入口，用户可直接咨询商品，获取推荐或库存、价格答复。
 
-## 已内置
-- 全局布局、暗色模式切换、渐变背景。
-- 响应式导航栏（无鉴权依赖）。
-- 示例首页区块：统计卡片、活动流、目录蓝图与下一步行动卡。
-- Tailwind 插件（typography、scrollbar）和基础 ESLint/TS 配置。
+## 技术栈
+- 前端：Next.js（App Router）+ TailwindCSS v4。
+- 语言与工具：TypeScript、ESLint、PostCSS。
 
-## 资产
-- `public/context-icon.svg` 可替换为自有品牌图标。
+## 开发运行
+1. 确认 Node.js 版本为 22（`.nvmrc` 已提供，可执行 `nvm use`）。
+2. 安装依赖：`npm install`。
+3. 启动开发：`npm run dev`，默认端口 3000。
+
+## 目录提示
+- `src/app/page.tsx`：主页与主要界面逻辑。
+- `src/components`：复用组件与导航配置。
+- `public/`：静态资源（如品牌图标）。
+
+## 后续规划
+- 完善知识图谱构建与可视化。
+- 增强 Agent 策略（动态调价、异常库存预警）。
+- 丰富用户对话意图识别与推荐精度。
