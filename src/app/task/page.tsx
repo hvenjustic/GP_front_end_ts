@@ -1,6 +1,4 @@
 'use client';
-
-import type { Metadata } from 'next';
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -41,12 +39,9 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(num) ? num : undefined;
 };
 
-export const metadata: Metadata = {
-  title: '任务队列 | 知识图谱电商'
-};
-
-const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
+const Card = ({ children, className = '', id }: { children: ReactNode; className?: string; id?: string }) => (
   <div
+    id={id}
     className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
   >
     {children}
