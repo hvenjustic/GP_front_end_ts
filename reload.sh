@@ -11,8 +11,8 @@ cd $PROJECT_DIR
 echo "📦 安装依赖..."
 npm install
 
-echo "🏗️  构建 Next.js..."
-npm run build
+echo "🏗️  构建 Next.js（限制单核，降低服务器压力）..."
+RAYON_NUM_THREADS=1 taskset -c 0 npm run build
 
 echo "📤 导出静态文件..."
 npm run export
