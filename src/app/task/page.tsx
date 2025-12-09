@@ -31,7 +31,7 @@ type StatusResponse = {
   queue_key: string;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_SPIDER_API ?? 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_SPIDER_API ?? 'http://www.hvenjustic.top:4000';
 
 const parseOptionalNumber = (value: string) => {
   if (!value.trim()) return undefined;
@@ -205,7 +205,7 @@ export default function TaskPage() {
               </h1>
               <p className="max-w-3xl text-lg text-slate-600 dark:text-slate-300">
                 调用后端 <code>/crawl</code> 与 <code>/status</code> 接口：输入待爬 URL、深度与页数即可追加到 Redis 队列，右侧实时展示剩余任务数。
-                支持设置环境变量 <code>NEXT_PUBLIC_SPIDER_API</code> 指向后端地址（默认 http://localhost:4000）。
+                支持设置环境变量 <code>NEXT_PUBLIC_SPIDER_API</code> 指向后端地址（默认 http://www.hvenjustic.top:4000）。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
