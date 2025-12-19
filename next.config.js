@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  // 需要运行时动态渲染 result/detail，不能用静态导出
+  output: 'standalone',
   reactStrictMode: true,
   images: { unoptimized: true },
   trailingSlash: true,
