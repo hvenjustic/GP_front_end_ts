@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { FiArrowLeft, FiRefreshCw } from 'react-icons/fi';
 
-const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://localhost:5010';
+const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:5010';
 
 export default function ResultDetailClient() {
   const searchParams = useSearchParams();
