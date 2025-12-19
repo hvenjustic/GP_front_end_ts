@@ -8,10 +8,10 @@ DEPLOY_DIR="/var/www/html"
 echo "📌 切换到项目目录：$PROJECT_DIR"
 cd $PROJECT_DIR
 
-echo "📦 安装依赖..."
-npm install
+echo "📦 安装依赖（限制单核，避免卡死）..."
+RAYON_NUM_THREADS=1 UV_THREADPOOL_SIZE=1 taskset -c 0 npm install
 
-echo "🏗️  构建 Next.js（限制单核，降低服务器压力）..."
+echo "🏗️  构建 Next.js（限制单核，避免卡死）..."
 RAYON_NUM_THREADS=1 taskset -c 0 npm run build
 
 echo "📤 导出静态文件..."
