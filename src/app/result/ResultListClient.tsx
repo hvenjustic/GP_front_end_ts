@@ -25,7 +25,7 @@ type ResultListResponse = {
     page_size: number;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:5010';
+const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:4010';
 
 const clampInt = (value: string | null, fallback: number, min: number, max: number) => {
     const parsed = Number(value);
@@ -146,8 +146,8 @@ export default function ResultListClient() {
                             <Link
                                 aria-disabled={page <= 1}
                                 className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition ${page <= 1
-                                        ? 'cursor-not-allowed border-slate-200 text-slate-300 dark:border-slate-800 dark:text-slate-600'
-                                        : 'border-slate-200 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600'
+                                    ? 'cursor-not-allowed border-slate-200 text-slate-300 dark:border-slate-800 dark:text-slate-600'
+                                    : 'border-slate-200 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600'
                                     }`}
                                 href={buildHref(Math.max(1, page - 1))}
                             >
@@ -157,8 +157,8 @@ export default function ResultListClient() {
                             <Link
                                 aria-disabled={page >= totalPages}
                                 className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition ${page >= totalPages
-                                        ? 'cursor-not-allowed border-slate-200 text-slate-300 dark:border-slate-800 dark:text-slate-600'
-                                        : 'border-slate-200 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600'
+                                    ? 'cursor-not-allowed border-slate-200 text-slate-300 dark:border-slate-800 dark:text-slate-600'
+                                    : 'border-slate-200 text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600'
                                     }`}
                                 href={buildHref(Math.min(totalPages, page + 1))}
                             >
