@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FiArrowLeft, FiArrowRight, FiRefreshCw } from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
+import { FiArrowLeft, FiArrowRight, FiInfo, FiRefreshCw } from 'react-icons/fi';
 
 type ResultItem = {
     id: number;
@@ -33,6 +34,12 @@ const clampInt = (value: string | null, fallback: number, min: number, max: numb
     return Math.min(max, Math.max(min, Math.floor(parsed)));
 };
 
+const DetailCard = ({ children }: { children: ReactNode }) => (
+    <div className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+        {children}
+    </div>
+);
+
 const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
     <div
         className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
@@ -44,11 +51,17 @@ const Card = ({ children, className = '' }: { children: ReactNode; className?: s
 export default function ResultListClient() {
     const searchParams = useSearchParams();
     const page = useMemo(() => clampInt(searchParams.get('page'), 1, 1, 10_000), [searchParams]);
-    const pageSize = useMemo(() => clampInt(searchParams.get('page_size'), 20, 1, 100), [searchParams]);
+    const pageSize = useMemo(() => clampInt(searchParams.get('page_size'), 10, 1, 100), [searchParams]);
 
     const [data, setData] = useState<ResultListResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [detailId, setDetailId] = useState<number | null>(null);
+    const [detailData, setDetailData] = useState<
+        Partial<ResultItem> & { result_md?: string | null; graph_json?: string | null; created_at?: string; updated_at?: string } | null
+    >(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
 
     const totalPages = useMemo(() => {
         if (!data) return 1;
@@ -67,6 +80,23 @@ export default function ResultListClient() {
             setError(e instanceof Error ? e.message : '未知错误');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchDetail = async (id: number) => {
+        setDetailId(id);
+        setDetailLoading(true);
+        setDetailError('');
+        try {
+            const res = await fetch(`${API_BASE}/api/results/${id}`, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`请求失败：${res.status}`);
+            const json = (await res.json()) as typeof detailData;
+            setDetailData(json);
+        } catch (e) {
+            setDetailError(e instanceof Error ? e.message : '未知错误');
+            setDetailData(null);
+        } finally {
+            setDetailLoading(false);
         }
     };
 
@@ -125,7 +155,16 @@ export default function ResultListClient() {
                                         <td className="px-4 py-3">{item.is_crawled ? '1' : '0'}</td>
                                         <td className="px-4 py-3">{item.crawl_count}</td>
                                         <td className="px-4 py-3">{item.page_count}</td>
-                                        <td className="px-4 py-3">{item.chunk_count}</td>
+                                        <td className="px-4 py-3">
+                                            {item.chunk_count}
+                                            <button
+                                                onClick={() => fetchDetail(item.id)}
+                                                className="ml-3 inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-indigo-700 dark:hover:text-indigo-200"
+                                            >
+                                                <FiInfo className="h-3 w-3" />
+                                                详情
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                                 {!loading && (data?.items || []).length === 0 && (
@@ -168,6 +207,43 @@ export default function ResultListClient() {
                         </div>
                     </div>
                 </Card>
+                {detailId && (
+                    <DetailCard>
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                                <FiInfo className="h-5 w-5 text-indigo-500" />
+                                <h3 className="text-lg font-semibold">详情（ID: {detailId}）</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {detailLoading && <span className="text-xs text-slate-500 dark:text-slate-400">加载中…</span>}
+                                {detailError && <span className="text-xs text-red-500">{detailError}</span>}
+                            </div>
+                        </div>
+                        {detailData ? (
+                            <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                                <div className="grid gap-2 md:grid-cols-2">
+                                    <div>站点：{detailData.site_name ?? '—'}</div>
+                                    <div>URL：{detailData.url}</div>
+                                    <div>爬取：{detailData.is_crawled ? '已完成' : '未完成'}（次数 {detailData.crawl_count ?? 0}）</div>
+                                    <div>页面数：{detailData.page_count ?? 0} | 分块：{detailData.chunk_count ?? 0}</div>
+                                    <div>抓取时间：{detailData.crawled_at ?? '—'}</div>
+                                    <div>LLM时间：{detailData.llm_processed_at ?? '—'}</div>
+                                    <div>创建：{(detailData as any).created_at ?? '—'}</div>
+                                    <div>更新：{(detailData as any).updated_at ?? '—'}</div>
+                                </div>
+                                {detailData.result_md ? (
+                                    <div className="prose max-w-none prose-slate dark:prose-invert">
+                                        <ReactMarkdown>{detailData.result_md}</ReactMarkdown>
+                                    </div>
+                                ) : (
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">暂无 Markdown 内容</div>
+                                )}
+                            </div>
+                        ) : (
+                            !detailLoading && <div className="text-xs text-slate-500 dark:text-slate-400">暂无数据</div>
+                        )}
+                    </DetailCard>
+                )}
             </div>
         </div>
     );
