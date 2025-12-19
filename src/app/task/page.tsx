@@ -7,18 +7,10 @@ import {
   FiCheckCircle,
   FiClock,
   FiList,
-  FiPlus,
   FiRefreshCw,
   FiSend,
-  FiServer,
-  FiTrash2
+  FiServer
 } from 'react-icons/fi';
-
-type TaskInput = {
-  url: string;
-  maxDepth: string;
-  maxPages: string;
-};
 
 type CrawlResponse = {
   queued: number;
@@ -49,12 +41,9 @@ const Card = ({ children, className = '', id }: { children: ReactNode; className
 );
 
 export default function TaskPage() {
-  const [entries, setEntries] = useState<TaskInput[]>([
-    { url: 'https://example.com', maxDepth: '3', maxPages: '20' },
-    { url: '', maxDepth: '', maxPages: '' }
-  ]);
+  const [urlsText, setUrlsText] = useState('https://example.com');
   const [defaultDepth, setDefaultDepth] = useState('3');
-  const [defaultPages, setDefaultPages] = useState('20');
+  const [defaultPages, setDefaultPages] = useState('1000');
   const [pending, setPending] = useState<number | null>(null);
   const [queueKey, setQueueKey] = useState('crawl_tasks');
   const [autoPoll, setAutoPoll] = useState(true);
@@ -65,42 +54,20 @@ export default function TaskPage() {
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const updateEntry = (index: number, field: keyof TaskInput, value: string) => {
-    setEntries((prev) => prev.map((item, idx) => (idx === index ? { ...item, [field]: value } : item)));
-  };
-
-  const addEntry = () => {
-    setEntries((prev) => [...prev, { url: '', maxDepth: '', maxPages: '' }]);
-  };
-
-  const removeEntry = (index: number) => {
-    setEntries((prev) => {
-      if (prev.length === 1) return [{ url: '', maxDepth: '', maxPages: '' }];
-      return prev.filter((_, idx) => idx !== index);
-    });
-  };
-
   const buildPayload = () => {
     const batchDepth = parseOptionalNumber(defaultDepth);
     const batchPages = parseOptionalNumber(defaultPages);
-    const normalized = entries
-      .map((item) => ({
-        url: item.url.trim(),
-        max_depth: parseOptionalNumber(item.maxDepth),
-        max_pages: parseOptionalNumber(item.maxPages)
-      }))
-      .filter((item) => item.url);
+    const normalized = urlsText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
 
     if (!normalized.length) {
       throw new Error('请至少输入一个 URL');
     }
 
     return {
-      urls: normalized.map(({ url, max_depth, max_pages }) => ({
-        url,
-        ...(max_depth ? { max_depth } : {}),
-        ...(max_pages ? { max_pages } : {})
-      })),
+      urls: normalized.map((url) => ({ url })),
       ...(batchDepth ? { max_depth: batchDepth } : {}),
       ...(batchPages ? { max_pages: batchPages } : {})
     };
@@ -180,7 +147,7 @@ export default function TaskPage() {
       const batchPages = parseOptionalNumber(defaultPages);
       return JSON.stringify(
         {
-          urls: [{ url: 'https://example.com', max_depth: 3, max_pages: 20 }],
+          urls: [{ url: 'https://example.com' }],
           ...(batchDepth ? { max_depth: batchDepth } : {}),
           ...(batchPages ? { max_pages: batchPages } : {})
         },
@@ -188,7 +155,7 @@ export default function TaskPage() {
         2
       );
     }
-  }, [defaultDepth, defaultPages, entries]);
+  }, [defaultDepth, defaultPages, urlsText]);
 
   return (
     <div className="relative isolate px-6 pb-16">
@@ -286,73 +253,28 @@ export default function TaskPage() {
                   value={defaultPages}
                   onChange={(e) => setDefaultPages(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                  placeholder="如 20"
+                  placeholder="如 1000"
                 />
                 <p className="text-xs text-slate-500 dark:text-slate-400">单个任务未填写时将继承此值</p>
               </label>
             </div>
 
             <div className="space-y-3">
-              {entries.map((item, idx) => (
-                <div
-                  key={`entry-${idx}`}
-                  className="rounded-2xl border border-slate-200/70 bg-white/80 p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/80"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-200">
-                        {idx + 1}
-                      </span>
-                      URL
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeEntry(idx)}
-                      className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                      aria-label="删除该行"
-                    >
-                      <FiTrash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    <input
-                      type="url"
-                      value={item.url}
-                      onChange={(e) => updateEntry(idx, 'url', e.target.value)}
-                      required={entries.length === 1}
-                      placeholder="https://example.com"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                    />
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.maxDepth}
-                        onChange={(e) => updateEntry(idx, 'maxDepth', e.target.value)}
-                        placeholder="覆盖最大深度（可选）"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                      />
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.maxPages}
-                        onChange={(e) => updateEntry(idx, 'maxPages', e.target.value)}
-                        placeholder="覆盖最大页面数（可选）"
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                      />
-                    </div>
-                  </div>
+              <label className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 px-2 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-200">
+                    URL
+                  </span>
+                  每行一个 URL（空行将被忽略）
                 </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={addEntry}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:text-indigo-200"
-              >
-                <FiPlus className="h-4 w-4" />
-                添加一行 URL
-              </button>
+                <textarea
+                  value={urlsText}
+                  onChange={(e) => setUrlsText(e.target.value)}
+                  placeholder="https://example.com\nhttps://another.com/page"
+                  className="h-44 w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-relaxed outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400">支持批量粘贴，提交时按行解析并自动跳过空行</p>
+              </label>
             </div>
 
             {error && (
@@ -380,7 +302,7 @@ export default function TaskPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setEntries([{ url: '', maxDepth: '', maxPages: '' }]);
+                  setUrlsText('');
                   setFeedback('');
                   setError('');
                 }}
