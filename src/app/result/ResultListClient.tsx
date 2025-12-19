@@ -109,7 +109,7 @@ export default function ResultListClient() {
 
     return (
         <div className="px-6 pb-16">
-            <div className="mx-auto mt-8 max-w-6xl space-y-4">
+            <div className="mx-auto mt-8 max-w-[108rem] space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">结果列表</h1>
                     <button
