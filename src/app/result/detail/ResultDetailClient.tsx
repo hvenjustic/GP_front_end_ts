@@ -23,6 +23,10 @@ type ResultItem = {
     llm_processed_at?: string | null;
     page_count?: number;
     chunk_count?: number;
+    is_crawled?: boolean;
+    crawl_count?: number;
+    created_at?: string | null;
+    updated_at?: string | null;
 };
 
 type ResultDetailResponse = {
@@ -35,6 +39,7 @@ type PreviewState = {
     content: string;
     loading: boolean;
     error?: string;
+    section: SectionKey;
 };
 
 type SectionKey = 'raw_markdown' | 'fit_markdown' | 'markdown_with_citations';
@@ -101,22 +106,53 @@ export default function ResultDetailClient() {
         setOpenSection((prev) => (prev === key ? null : key));
     };
 
-    const handleLoadMD = async (url: string, type: string) => {
+    const handleLoadMD = async (url: string, section: SectionKey, type: string) => {
         if (!url) return;
-        setPreview({ url, type, content: '', loading: true, error: undefined });
+        setPreview({ url, section, type, content: '', loading: true, error: undefined });
         try {
             const res = await fetch(url);
             if (!res.ok) throw new Error(`下载失败：${res.status}`);
             const text = await res.text();
-            setPreview({ url, type, content: text, loading: false });
+            setPreview({ url, section, type, content: text, loading: false });
         } catch (e) {
             setPreview({
                 url,
+                section,
                 type,
                 content: '',
                 loading: false,
                 error: e instanceof Error ? e.message : '下载出错',
             });
+        }
+    };
+
+    const formatTime = (value?: string | null) => {
+        if (!value) return '—';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    };
+
+    const mdNums = mdStore?.nums ?? data?.item?.page_count;
+    const detail = data?.item;
+
+    const handlePreviewAndDownload = async (url: string, section: SectionKey, type: string) => {
+        if (!url) return;
+        triggerDownload(url);
+        await handleLoadMD(url, section, type);
+    };
+
+    const triggerDownload = (url: string) => {
+        try {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '';
+            a.target = '_blank';
+            a.rel = 'noreferrer';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch {
+            window.open(url, '_blank');
         }
     };
 
@@ -158,18 +194,24 @@ export default function ResultDetailClient() {
                     </div>
                 )}
 
-                <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 space-y-3">
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                        <span>结果ID：{data?.item?.id ?? '—'}</span>
-                        <span>URL：{data?.item?.url ?? '—'}</span>
-                        <span>站点：{data?.item?.site_name ?? '—'}</span>
-                        <span>页数：{data?.item?.page_count ?? '—'}</span>
-                        <span>分片：{data?.item?.chunk_count ?? '—'}</span>
+                <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 space-y-4">
+                    <div className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-2">
+                        <div>站点：{detail?.site_name ?? '—'}</div>
+                        <div>URL：{detail?.url ?? '—'}</div>
+                        <div>爬取：{detail?.is_crawled ? '已完成' : '未完成'}（次数 {detail?.crawl_count ?? 0}）</div>
+                        <div>页面数：{mdNums ?? '—'} | 分块：{detail?.chunk_count ?? 0}</div>
+                        <div>抓取时间：{formatTime(detail?.crawled_at)}</div>
+                        <div>LLM时间：{formatTime(detail?.llm_processed_at)}</div>
+                        <div>创建：{formatTime(detail?.created_at)}</div>
+                        <div>更新：{formatTime(detail?.updated_at)}</div>
+                        <div>MD 文档数：{mdStore?.nums ?? '—'}</div>
                     </div>
+
                     {!mdStore && <div className="text-sm text-slate-500 dark:text-slate-400">暂无 markdown 链接数据。</div>}
 
                     {sections.map((sec) => {
                         const isOpen = openSection === sec.key;
+                        const isActivePreview = preview && preview.section === sec.key;
                         return (
                             <div
                                 key={sec.key}
@@ -188,43 +230,46 @@ export default function ResultDetailClient() {
                                     </div>
                                 </button>
                                 {isOpen && (
-                                    <div className="px-4 pb-4">
-                                        <div className="max-h-48 overflow-auto space-y-2 rounded-lg border border-dashed border-slate-200 p-3 dark:border-slate-700">
+                                    <div className="space-y-3 px-4 pb-4">
+                                        <div className="h-56 overflow-auto space-y-2 rounded-lg border border-dashed border-slate-200 p-3 dark:border-slate-700">
                                             {sec.data.length === 0 && (
                                                 <div className="text-xs text-slate-500 dark:text-slate-400">暂无链接</div>
                                             )}
                                             {sec.data.map((u, idx) => (
                                                 <button
                                                     key={`${sec.key}-${idx}-${u}`}
-                                                    onClick={() => handleLoadMD(u, sec.title)}
+                                                    onClick={() => handlePreviewAndDownload(u, sec.key, sec.title)}
                                                     className="group flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                                                 >
                                                     <span className="truncate">{u || '空链接'}</span>
-                                                    <FiExternalLink className="ml-2 h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300" />
+                                                    <span className="flex items-center gap-1 text-slate-400 transition group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300">
+                                                        <FiExternalLink className="h-4 w-4" />
+                                                        <span>下载并预览</span>
+                                                    </span>
                                                 </button>
                                             ))}
                                         </div>
+
+                                        {isActivePreview && (
+                                            <div className="glass-panel rounded-xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-900/40 dark:bg-slate-900/70">
+                                                <div className="mb-2 flex items-center justify-between text-xs text-slate-700 dark:text-slate-200">
+                                                    <span className="font-semibold">
+                                                        预览：{preview?.type} - {preview?.url}
+                                                    </span>
+                                                    {preview?.loading && <span className="text-amber-600">加载中...</span>}
+                                                    {preview?.error && <span className="text-red-500">{preview.error}</span>}
+                                                </div>
+                                                <div className="max-h-60 overflow-auto rounded-lg bg-slate-900 p-4 text-[11px] leading-relaxed text-slate-50 shadow-inner">
+                                                    {preview?.loading ? '加载中...' : preview?.content || '内容为空'}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         );
                     })}
                 </div>
-
-                {preview && (
-                    <div className="glass-panel rounded-2xl border border-indigo-200/70 bg-indigo-50/70 p-5 shadow-sm dark:border-indigo-900/40 dark:bg-slate-900/70">
-                        <div className="mb-3 flex items-center justify-between">
-                            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                预览：{preview.type} - {preview.url}
-                            </div>
-                            {preview.loading && <span className="text-xs text-slate-500">加载中...</span>}
-                            {preview.error && <span className="text-xs text-red-500">{preview.error}</span>}
-                        </div>
-                        <div className="max-h-[50vh] overflow-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-50 shadow-inner">
-                            {preview.loading ? '加载中...' : preview.content || '内容为空'}
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
