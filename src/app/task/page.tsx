@@ -9,7 +9,8 @@ import {
   FiList,
   FiRefreshCw,
   FiSend,
-  FiServer
+  FiServer,
+  FiTrash2
 } from 'react-icons/fi';
 
 type CrawlResponse = {
@@ -23,7 +24,14 @@ type StatusResponse = {
   queue_key: string;
 };
 
+type ClearQueueResponse = {
+  queue_name: string;
+  removed_keys: number;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:4010';
+const DEFAULT_QUEUE_KEY = 'crawl4ai:queue';
+const ACTIVE_SET_KEY = 'crawl4ai:active';
 
 const parseOptionalNumber = (value: string) => {
   if (!value.trim()) return undefined;
@@ -45,12 +53,13 @@ export default function TaskPage() {
   const [defaultDepth, setDefaultDepth] = useState('3');
   const [defaultPages, setDefaultPages] = useState('1000');
   const [pending, setPending] = useState<number | null>(null);
-  const [queueKey, setQueueKey] = useState('crawl_tasks');
+  const [queueKey, setQueueKey] = useState(DEFAULT_QUEUE_KEY);
   const [autoPoll, setAutoPoll] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const [clearing, setClearing] = useState<string | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -89,6 +98,34 @@ export default function TaskPage() {
       setError(`无法获取任务进度：${msg}`);
     }
   }, []);
+
+  const clearQueue = useCallback(
+    async (targetKey: string, label: string) => {
+      setClearing(targetKey);
+      setFeedback('');
+      setError('');
+      try {
+        const res = await fetch(`${API_BASE}/api/queues/clear`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queue_name: targetKey })
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `清空失败：${res.status}`);
+        }
+        const data = (await res.json()) as ClearQueueResponse;
+        setFeedback(`${label}已清空，删除键 ${data.removed_keys ?? 0} 个`);
+        await fetchStatus();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '未知错误';
+        setError(`清空队列失败：${msg}`);
+      } finally {
+        setClearing(null);
+      }
+    },
+    [fetchStatus]
+  );
 
   useEffect(() => {
     if (autoPoll) {
@@ -335,6 +372,32 @@ export default function TaskPage() {
                   />
                 </button>
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => clearQueue(queueKey || DEFAULT_QUEUE_KEY, '任务队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900/60 dark:bg-rose-900/40 dark:text-rose-100"
+              >
+                {clearing === (queueKey || DEFAULT_QUEUE_KEY) ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空任务队列
+              </button>
+              <button
+                onClick={() => clearQueue(ACTIVE_SET_KEY, '活跃队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:-translate-y-0.5 hover:border-amber-300 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/60 dark:bg-amber-900/40 dark:text-amber-100"
+              >
+                {clearing === ACTIVE_SET_KEY ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空活跃队列
+              </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-4 dark:border-emerald-800/60 dark:bg-emerald-900/40">
