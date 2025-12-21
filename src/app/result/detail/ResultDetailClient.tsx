@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { FiArrowLeft, FiRefreshCw, FiExternalLink, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 
-const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:4010';
+const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://10.138.19.107:4010';
 
 type MarkdownStore = {
     nums?: number;
@@ -274,4 +274,3 @@ export default function ResultDetailClient() {
         </div>
     );
 }
-
