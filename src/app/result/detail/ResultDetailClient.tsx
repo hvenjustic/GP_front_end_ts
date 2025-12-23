@@ -207,6 +207,26 @@ export default function ResultDetailClient() {
                         <div>创建：{formatTime(detail?.created_at)}</div>
                         <div>更新：{formatTime(detail?.updated_at)}</div>
                         <div>MD 文档数：{mdStore?.nums ?? '—'}</div>
+                        <div className="md:col-span-2">
+                            预处理结果（processed_md）：{' '}
+                            {detail?.processed_md ? (
+                                <button
+                                    onClick={() => triggerDownload(detail.processed_md as string)}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-indigo-700 transition hover:border-indigo-200 hover:text-indigo-800 dark:border-slate-700 dark:text-indigo-200 dark:hover:border-indigo-500"
+                                >
+                                    <FiExternalLink className="h-4 w-4" />
+                                    下载/查看
+                                </button>
+                            ) : (
+                                '—'
+                            )}
+                        </div>
+                        <div className="md:col-span-2">
+                            图谱 JSON（graph_json）：
+                            <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                {detail?.graph_json || '—'}
+                            </div>
+                        </div>
                     </div>
 
                     {!mdStore && <div className="text-sm text-slate-500 dark:text-slate-400">暂无 markdown 链接数据。</div>}
