@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FiArrowLeft, FiArrowRight, FiInfo, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiExternalLink, FiInfo, FiRefreshCw } from 'react-icons/fi';
 
 type MarkdownStore = {
     nums?: number;
@@ -228,6 +228,12 @@ export default function ResultListClient() {
         }
     };
 
+    const handleOpenGraph = (id?: number | string | null) => {
+        if (!id) return;
+        const target = `/result/detail/graph?id=${encodeURIComponent(String(id))}`;
+        window.open(target, '_blank', 'noopener,noreferrer');
+    };
+
     return (
         <div className="px-6 pb-16">
             <div className="mx-auto mt-8 max-w-[108rem] space-y-4">
@@ -397,7 +403,17 @@ export default function ResultListClient() {
                                                 )}
                                             </div>
                                             <div className="md:col-span-2">
-                                                图谱 JSON（graph_json）：
+                                                <div className="flex items-center gap-3">
+                                                    <span>图谱 JSON（graph_json）：</span>
+                                                    <button
+                                                        onClick={() => handleOpenGraph(detailData.id)}
+                                                        disabled={!detailData.graph_json}
+                                                        className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:border-emerald-700"
+                                                    >
+                                                        <FiExternalLink className="h-4 w-4" />
+                                                        图渲染
+                                                    </button>
+                                                </div>
                                                 <div className="mt-1 max-h-36 overflow-auto rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                                     {detailData.graph_json || '—'}
                                                 </div>
