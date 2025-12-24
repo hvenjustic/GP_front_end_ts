@@ -34,6 +34,12 @@ type ResultListResponse = {
     page_size: number;
 };
 
+type QueueAckResponse = {
+    queued: number;
+    queue_key: string;
+    pending: number;
+};
+
 type ResultDetail = ResultItem & {
     result_md?: string | null;
     graph_json?: string | null;
@@ -190,15 +196,11 @@ export default function ResultListClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id }),
             });
-            const json = await res.json();
+            const json = (await res.json()) as QueueAckResponse & { error?: string };
             if (!res.ok) {
                 throw new Error(json?.error || '请求失败');
             }
-            alert('预处理完成');
-            fetchList();
-            if (detailId === id) {
-                fetchDetail(id);
-            }
+            alert(`预处理已入队，队列 ${json.queue_key} 待处理 ${json.pending ?? 0} 条`);
         } catch (e) {
             alert(`预处理失败：${e instanceof Error ? e.message : '未知错误'}`);
         } finally {
@@ -214,15 +216,11 @@ export default function ResultListClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id }),
             });
-            const json = await res.json();
+            const json = (await res.json()) as QueueAckResponse & { error?: string };
             if (!res.ok) {
                 throw new Error(json?.error || '请求失败');
             }
-            alert('图谱生成完成');
-            fetchList();
-            if (detailId === id) {
-                fetchDetail(id);
-            }
+            alert(`图谱生成已入队，队列 ${json.queue_key} 待处理 ${json.pending ?? 0} 条`);
         } catch (e) {
             alert(`图谱生成失败：${e instanceof Error ? e.message : '未知错误'}`);
         } finally {

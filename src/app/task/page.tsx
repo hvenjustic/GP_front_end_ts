@@ -32,6 +32,10 @@ type ClearQueueResponse = {
 const API_BASE = process.env.NEXT_PUBLIC_GO_API ?? 'http://www.hvenjustic.top:4010';
 const DEFAULT_QUEUE_KEY = 'crawl4ai:queue';
 const ACTIVE_SET_KEY = 'crawl4ai:active';
+const PREPROCESS_QUEUE_KEY = 'kg:preprocess:queue';
+const PREPROCESS_ACTIVE_KEY = 'kg:preprocess:active';
+const GRAPH_QUEUE_KEY = 'kg:graph:queue';
+const GRAPH_ACTIVE_KEY = 'kg:graph:active';
 
 const parseOptionalNumber = (value: string) => {
   if (!value.trim()) return undefined;
@@ -54,6 +58,12 @@ export default function TaskPage() {
   const [defaultPages, setDefaultPages] = useState('1000');
   const [pending, setPending] = useState<number | null>(null);
   const [queueKey, setQueueKey] = useState(DEFAULT_QUEUE_KEY);
+  const [preprocessPending, setPreprocessPending] = useState<number | null>(null);
+  const [preprocessQueueKey, setPreprocessQueueKey] = useState(PREPROCESS_QUEUE_KEY);
+  const [preprocessLastUpdate, setPreprocessLastUpdate] = useState<number | null>(null);
+  const [graphPending, setGraphPending] = useState<number | null>(null);
+  const [graphQueueKey, setGraphQueueKey] = useState(GRAPH_QUEUE_KEY);
+  const [graphLastUpdate, setGraphLastUpdate] = useState<number | null>(null);
   const [autoPoll, setAutoPoll] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -99,6 +109,44 @@ export default function TaskPage() {
     }
   }, []);
 
+  const fetchPreprocessStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/results/preprocess/status`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`状态查询失败：${res.status}`);
+      }
+      const data = (await res.json()) as StatusResponse;
+      setPreprocessPending(data.pending);
+      setPreprocessQueueKey(data.queue_key);
+      setPreprocessLastUpdate(Date.now());
+      setError('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '未知错误';
+      setError(`无法获取预处理进度：${msg}`);
+    }
+  }, []);
+
+  const fetchGraphStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/results/graph/status`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`状态查询失败：${res.status}`);
+      }
+      const data = (await res.json()) as StatusResponse;
+      setGraphPending(data.pending);
+      setGraphQueueKey(data.queue_key);
+      setGraphLastUpdate(Date.now());
+      setError('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '未知错误';
+      setError(`无法获取图谱生成进度：${msg}`);
+    }
+  }, []);
+
+  const fetchAllStatus = useCallback(async () => {
+    await Promise.all([fetchStatus(), fetchPreprocessStatus(), fetchGraphStatus()]);
+  }, [fetchGraphStatus, fetchPreprocessStatus, fetchStatus]);
+
   const clearQueue = useCallback(
     async (targetKey: string, label: string) => {
       setClearing(targetKey);
@@ -116,7 +164,7 @@ export default function TaskPage() {
         }
         const data = (await res.json()) as ClearQueueResponse;
         setFeedback(`${label}已清空，删除键 ${data.removed_keys ?? 0} 个`);
-        await fetchStatus();
+        await fetchAllStatus();
       } catch (err) {
         const msg = err instanceof Error ? err.message : '未知错误';
         setError(`清空队列失败：${msg}`);
@@ -124,19 +172,19 @@ export default function TaskPage() {
         setClearing(null);
       }
     },
-    [fetchStatus]
+    [fetchAllStatus]
   );
 
   useEffect(() => {
     if (autoPoll) {
-      fetchStatus();
-      pollingRef.current = setInterval(fetchStatus, 10000);
+      fetchAllStatus();
+      pollingRef.current = setInterval(fetchAllStatus, 10000);
     }
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = null;
     };
-  }, [autoPoll, fetchStatus]);
+  }, [autoPoll, fetchAllStatus]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -221,7 +269,7 @@ export default function TaskPage() {
                 <FiSend className="h-4 w-4" />
               </a>
               <button
-                onClick={fetchStatus}
+                onClick={fetchAllStatus}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
               >
                 <FiRefreshCw className="h-4 w-4" />
@@ -419,12 +467,132 @@ export default function TaskPage() {
               <FiClock className="h-4 w-4" />
               {lastUpdate ? `最近拉取：${new Date(lastUpdate).toLocaleTimeString()}` : '等待首次查询'}
               <button
-                onClick={fetchStatus}
+                onClick={fetchAllStatus}
                 className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:text-indigo-200"
               >
                 <FiRefreshCw className="h-3 w-3" />
                 手动刷新
               </button>
+            </div>
+          </Card>
+
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <FiActivity className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold">预处理队列进度</h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <FiClock className="h-4 w-4" />
+                {preprocessLastUpdate ? `最近拉取：${new Date(preprocessLastUpdate).toLocaleTimeString()}` : '等待首次查询'}
+                <button
+                  onClick={fetchPreprocessStatus}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:text-indigo-200"
+                >
+                  <FiRefreshCw className="h-3 w-3" />
+                  手动刷新
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => clearQueue(preprocessQueueKey || PREPROCESS_QUEUE_KEY, '预处理队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:-translate-y-0.5 hover:border-amber-300 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/60 dark:bg-amber-900/40 dark:text-amber-100"
+              >
+                {clearing === (preprocessQueueKey || PREPROCESS_QUEUE_KEY) ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空任务队列
+              </button>
+              <button
+                onClick={() => clearQueue(PREPROCESS_ACTIVE_KEY, '预处理活跃队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:-translate-y-0.5 hover:border-amber-300 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/60 dark:bg-amber-900/40 dark:text-amber-100"
+              >
+                {clearing === PREPROCESS_ACTIVE_KEY ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空活跃队列
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-4 dark:border-emerald-800/60 dark:bg-emerald-900/40">
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">剩余任务数</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-100">
+                  {preprocessPending ?? '—'}
+                </p>
+                <p className="text-xs text-emerald-700/80 dark:text-emerald-200/80">队列 + 活跃总数</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-4 dark:border-slate-800/60 dark:bg-slate-900/60">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">队列键</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">{preprocessQueueKey}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Redis rpush/brpop 消费</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                <FiActivity className="h-5 w-5 text-emerald-500" />
+                <h2 className="text-lg font-semibold">图谱生成队列进度</h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <FiClock className="h-4 w-4" />
+                {graphLastUpdate ? `最近拉取：${new Date(graphLastUpdate).toLocaleTimeString()}` : '等待首次查询'}
+                <button
+                  onClick={fetchGraphStatus}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-700 dark:hover:text-indigo-200"
+                >
+                  <FiRefreshCw className="h-3 w-3" />
+                  手动刷新
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => clearQueue(graphQueueKey || GRAPH_QUEUE_KEY, '图谱生成队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:-translate-y-0.5 hover:border-sky-300 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-900/60 dark:bg-sky-900/40 dark:text-sky-100"
+              >
+                {clearing === (graphQueueKey || GRAPH_QUEUE_KEY) ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空任务队列
+              </button>
+              <button
+                onClick={() => clearQueue(GRAPH_ACTIVE_KEY, '图谱活跃队列')}
+                disabled={!!clearing}
+                className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 transition hover:-translate-y-0.5 hover:border-sky-300 hover:text-sky-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-900/60 dark:bg-sky-900/40 dark:text-sky-100"
+              >
+                {clearing === GRAPH_ACTIVE_KEY ? (
+                  <FiRefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FiTrash2 className="h-4 w-4" />
+                )}
+                清空活跃队列
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/70 p-4 dark:border-emerald-800/60 dark:bg-emerald-900/40">
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-200">剩余任务数</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-800 dark:text-emerald-100">
+                  {graphPending ?? '—'}
+                </p>
+                <p className="text-xs text-emerald-700/80 dark:text-emerald-200/80">队列 + 活跃总数</p>
+              </div>
+              <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-4 dark:border-slate-800/60 dark:bg-slate-900/60">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">队列键</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">{graphQueueKey}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Redis rpush/brpop 消费</p>
+              </div>
             </div>
           </Card>
 
