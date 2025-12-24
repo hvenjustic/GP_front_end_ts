@@ -143,6 +143,12 @@ export default function ResultDetailClient() {
         await handleLoadMD(url, section, type);
     };
 
+    const handleOpenGraph = () => {
+        if (!id) return;
+        const target = `/result/detail/graph?id=${encodeURIComponent(id)}`;
+        window.open(target, '_blank', 'noopener,noreferrer');
+    };
+
     const triggerDownload = (url: string) => {
         try {
             const a = document.createElement('a');
@@ -222,7 +228,17 @@ export default function ResultDetailClient() {
                             )}
                         </div>
                         <div className="md:col-span-2">
-                            图谱 JSON（graph_json）：
+                            <div className="flex items-center gap-3">
+                                <span>图谱 JSON（graph_json）：</span>
+                                <button
+                                    onClick={handleOpenGraph}
+                                    disabled={!detail?.graph_json}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:border-emerald-700"
+                                >
+                                    <FiExternalLink className="h-4 w-4" />
+                                    图渲染
+                                </button>
+                            </div>
                             <div className="mt-1 max-h-48 overflow-auto rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                 {detail?.graph_json || '—'}
                             </div>
