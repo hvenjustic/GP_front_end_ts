@@ -17,6 +17,8 @@ type GraphNode = {
     type?: string;
     label?: string;
     description?: string;
+    aliases?: string[];
+    extra?: Record<string, any>;
 };
 
 type GraphEdge = {
@@ -116,6 +118,8 @@ export default function GraphViewClient() {
                 type: d.type,
                 label: d.label,
                 description: (d as any).description || '',
+                aliases: (d as any).aliases,
+                extra: (d as any).extra,
             });
         });
     };
@@ -230,6 +234,17 @@ export default function GraphViewClient() {
                                 <div>名称：{selected.name || selected.label || '—'}</div>
                                 <div>类型：{selected.type || '—'}</div>
                                 <div>描述：{selected.description || '—'}</div>
+                                {selected.aliases && selected.aliases.length > 0 && (
+                                    <div>别名：{selected.aliases.join('、')}</div>
+                                )}
+                                {selected.extra && (
+                                    <div className="text-xs">
+                                        <div className="font-semibold text-slate-600 dark:text-slate-300">Extra</div>
+                                        <pre className="mt-1 max-h-32 overflow-auto rounded-lg bg-slate-900/80 p-2 text-[11px] text-slate-100 shadow-inner">
+                                            {JSON.stringify(selected.extra, null, 2)}
+                                        </pre>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
