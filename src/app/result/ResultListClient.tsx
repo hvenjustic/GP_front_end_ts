@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FiArrowLeft, FiArrowRight, FiInfo, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiInfo, FiPlay, FiRefreshCw } from 'react-icons/fi';
 import { API_BASE } from '@/config/api';
 
 type CrawlJobMeta = {
@@ -24,7 +24,8 @@ type CrawlJobMeta = {
 
 type ResultItem = {
     id: number;
-    site_name: string | null;
+    name?: string | null;
+    site_name?: string | null;
     url: string;
     crawled_at: string | null;
     llm_processed_at: string | null;
@@ -81,6 +82,10 @@ export default function ResultListClient() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState('');
     const [graphLoadingId, setGraphLoadingId] = useState<number | null>(null);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [crawlSubmitting, setCrawlSubmitting] = useState(false);
+    const [crawlFeedback, setCrawlFeedback] = useState('');
+    const [crawlError, setCrawlError] = useState('');
 
     const totalPages = useMemo(() => {
         if (!data) return 1;
@@ -122,6 +127,31 @@ export default function ResultListClient() {
     useEffect(() => {
         fetchList();
     }, [page, pageSize]);
+
+    useEffect(() => {
+        if (!data?.items?.length) {
+            setSelectedIds([]);
+            return;
+        }
+        const idSet = new Set(data.items.map((item) => item.id));
+        setSelectedIds((prev) => prev.filter((id) => idSet.has(id)));
+    }, [data]);
+
+    const allIds = useMemo(() => (data?.items || []).map((item) => item.id), [data]);
+    const allSelected = allIds.length > 0 && allIds.every((id) => selectedIds.includes(id));
+
+    const toggleSelectAll = () => {
+        if (!allIds.length) return;
+        if (allSelected) {
+            setSelectedIds((prev) => prev.filter((id) => !allIds.includes(id)));
+            return;
+        }
+        setSelectedIds((prev) => Array.from(new Set([...prev, ...allIds])));
+    };
+
+    const toggleSelect = (id: number) => {
+        setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+    };
 
     const buildHref = (nextPage: number) => `/result?page=${nextPage}&page_size=${pageSize}`;
 
@@ -180,28 +210,82 @@ export default function ResultListClient() {
         }
     };
 
+    const handleEnqueueCrawl = async () => {
+        if (!selectedIds.length) return;
+        setCrawlSubmitting(true);
+        setCrawlFeedback('');
+        setCrawlError('');
+        try {
+            const res = await fetch(`${API_BASE}/api/tasks/crawl`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: selectedIds }),
+            });
+            const json = (await res.json()) as QueueAckResponse & { error?: string };
+            if (!res.ok) {
+                throw new Error(json?.error || '请求失败');
+            }
+            setCrawlFeedback(`已加入队列 ${json.queued} 条，当前待处理 ${json.pending ?? 0} 条`);
+            setSelectedIds([]);
+            fetchList();
+        } catch (e) {
+            setCrawlError(e instanceof Error ? e.message : '未知错误');
+        } finally {
+            setCrawlSubmitting(false);
+        }
+    };
+
     return (
         <div className="px-6 pb-16">
             <div className="mx-auto mt-8 max-w-[108rem] space-y-4">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">结果列表</h1>
-                    <button
-                        onClick={fetchList}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
-                    >
-                        <FiRefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        刷新
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleEnqueueCrawl}
+                            disabled={crawlSubmitting || selectedIds.length === 0}
+                            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:border-emerald-700"
+                        >
+                            <FiPlay className={`h-4 w-4 ${crawlSubmitting ? 'animate-spin' : ''}`} />
+                            Crawl{selectedIds.length ? ` (${selectedIds.length})` : ''}
+                        </button>
+                        <button
+                            onClick={fetchList}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
+                        >
+                            <FiRefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                            刷新
+                        </button>
+                    </div>
                 </div>
 
                 <Card className="overflow-hidden p-0">
                     {error && <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700">{error}</div>}
+                    {crawlError && (
+                        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                            Crawl 入队失败：{crawlError}
+                        </div>
+                    )}
+                    {crawlFeedback && (
+                        <div className="border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-700">
+                            {crawlFeedback}
+                        </div>
+                    )}
                     <div className="overflow-auto">
                         <table className="min-w-full text-left text-sm">
                             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
                                 <tr>
+                                    <th className="px-4 py-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={allSelected}
+                                            onChange={toggleSelectAll}
+                                            aria-label="全选"
+                                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                    </th>
                                     <th className="px-4 py-3">ID</th>
-                                    <th className="px-4 py-3">site_name</th>
+                                    <th className="px-4 py-3">名称</th>
                                     <th className="px-4 py-3">url</th>
                                     <th className="px-4 py-3">crawl_status</th>
                                     <th className="px-4 py-3">progress</th>
@@ -213,10 +297,19 @@ export default function ResultListClient() {
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {(data?.items || []).map((item) => (
                                     <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                                        <td className="px-4 py-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.includes(item.id)}
+                                                onChange={() => toggleSelect(item.id)}
+                                                aria-label={`选择任务 ${item.id}`}
+                                                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 font-semibold text-indigo-600 dark:text-indigo-300">
                                             <Link href={`/result/detail?id=${item.id}`}>{item.id}</Link>
                                         </td>
-                                        <td className="px-4 py-3">{item.site_name || '-'}</td>
+                                        <td className="px-4 py-3">{item.name || item.site_name || '-'}</td>
                                         <td className="px-4 py-3 max-w-[520px] truncate" title={item.url}>
                                             {item.url}
                                         </td>
@@ -248,7 +341,7 @@ export default function ResultListClient() {
                                 ))}
                                 {!loading && (data?.items || []).length === 0 && (
                                     <tr>
-                                        <td className="px-4 py-10 text-center text-slate-500 dark:text-slate-400" colSpan={8}>
+                                        <td className="px-4 py-10 text-center text-slate-500 dark:text-slate-400" colSpan={9}>
                                             暂无数据
                                         </td>
                                     </tr>
@@ -310,8 +403,8 @@ export default function ResultListClient() {
                             <div className="grid gap-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-200">
                                 {detailData ? (
                                     <>
-                                        <div className="grid gap-2 md:grid-cols-2">
-                                            <div>站点：{detailData.site_name ?? '—'}</div>
+                                            <div className="grid gap-2 md:grid-cols-2">
+                                            <div>站点：{detailData.name ?? detailData.site_name ?? '—'}</div>
                                             <div>URL：{detailData.url}</div>
                                             <div>任务状态：{formatStatus(detailData)}</div>
                                             <div>重试次数：{detailData.crawl_count ?? 0}</div>

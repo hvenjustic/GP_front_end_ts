@@ -15,9 +15,7 @@ import {
 import { API_BASE } from '@/config/api';
 
 type CrawlResponse = {
-  queued: number;
-  queue_key: string;
-  pending: number;
+  created: number;
 };
 
 type StatusResponse = {
@@ -37,12 +35,6 @@ const PREPROCESS_ACTIVE_KEY = 'kg:preprocess:active';
 const GRAPH_QUEUE_KEY = 'kg:graph:queue';
 const GRAPH_ACTIVE_KEY = 'kg:graph:active';
 
-const parseOptionalNumber = (value: string) => {
-  if (!value.trim()) return undefined;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
-};
-
 const Card = ({ children, className = '', id }: { children: ReactNode; className?: string; id?: string }) => (
   <div
     id={id}
@@ -53,9 +45,7 @@ const Card = ({ children, className = '', id }: { children: ReactNode; className
 );
 
 export default function TaskPage() {
-  const [urlsText, setUrlsText] = useState('https://example.com');
-  const [defaultDepth, setDefaultDepth] = useState('3');
-  const [defaultPages, setDefaultPages] = useState('1000');
+  const [urlsText, setUrlsText] = useState('示例站点 https://example.com');
   const [pending, setPending] = useState<number | null>(null);
   const [queueKey, setQueueKey] = useState(DEFAULT_QUEUE_KEY);
   const [preprocessPending, setPreprocessPending] = useState<number | null>(null);
@@ -74,21 +64,27 @@ export default function TaskPage() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const buildPayload = () => {
-    const batchDepth = parseOptionalNumber(defaultDepth);
-    const batchPages = parseOptionalNumber(defaultPages);
     const normalized = urlsText
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
 
     if (!normalized.length) {
-      throw new Error('请至少输入一个 URL');
+      throw new Error('请至少输入一条任务（名称 + URL）');
     }
 
+    const urls = normalized.map((line, index) => {
+      const parts = line.split(/\s+/).filter(Boolean);
+      if (parts.length < 2) {
+        throw new Error(`第 ${index + 1} 行格式不正确，需要“名称 URL”`);
+      }
+      const url = parts[parts.length - 1];
+      const name = parts.slice(0, -1).join(' ');
+      return { name, url };
+    });
+
     return {
-      urls: normalized.map((url) => ({ url })),
-      ...(batchDepth ? { max_depth: batchDepth } : {}),
-      ...(batchPages ? { max_pages: batchPages } : {})
+      urls
     };
   };
 
@@ -211,10 +207,8 @@ export default function TaskPage() {
         throw new Error(text || `服务返回 ${res.status}`);
       }
       const data = (await res.json()) as CrawlResponse;
-      setQueueKey(data.queue_key);
-      setPending(data.pending);
-      setLastUpdate(Date.now());
-      setFeedback(`已提交 ${data.queued} 条任务，队列剩余 ${data.pending} 条`);
+      setFeedback(`已录入 ${data.created} 条任务，请到结果页选择后点击 Crawl 启动`);
+      await fetchAllStatus();
       setAutoPoll(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '未知错误';
@@ -228,19 +222,15 @@ export default function TaskPage() {
     try {
       return JSON.stringify(buildPayload(), null, 2);
     } catch {
-      const batchDepth = parseOptionalNumber(defaultDepth);
-      const batchPages = parseOptionalNumber(defaultPages);
       return JSON.stringify(
         {
-          urls: [{ url: 'https://example.com' }],
-          ...(batchDepth ? { max_depth: batchDepth } : {}),
-          ...(batchPages ? { max_pages: batchPages } : {})
+          urls: [{ name: '示例站点', url: 'https://example.com' }]
         },
         null,
         2
       );
     }
-  }, [defaultDepth, defaultPages, urlsText]);
+  }, [urlsText]);
 
   return (
     <div className="relative isolate px-6 pb-16">
@@ -256,8 +246,8 @@ export default function TaskPage() {
                 创建任务并自动轮询进度
               </h1>
               <p className="max-w-3xl text-lg text-slate-600 dark:text-slate-300">
-                调用后端 <code>/api/tasks</code> 与 <code>/api/tasks/status</code> 接口：输入待爬 URL、深度与页数即可追加到 Redis 队列，右侧实时展示剩余任务数。
-                后端地址统一在 <code>src/config/api.ts</code> 中配置，也可通过环境变量 <code>NEXT_PUBLIC_GO_API</code> 覆盖。
+                调用后端 <code>/api/tasks</code> 接口批量录入站点任务，录入后可在结果页勾选并点击 <strong>Crawl</strong> 开始入队。
+                队列状态仍可通过 <code>/api/tasks/status</code> 查看，后端地址统一在 <code>src/config/api.ts</code> 中配置，也可通过环境变量 <code>NEXT_PUBLIC_GO_API</code> 覆盖。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -312,53 +302,26 @@ export default function TaskPage() {
               <h2 className="text-lg font-semibold">创建任务</h2>
             </div>
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200">
-              批量提交 + 可选覆盖
+              批量提交
             </span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">默认最大深度</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={defaultDepth}
-                  onChange={(e) => setDefaultDepth(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                  placeholder="如 3"
-                />
-                <p className="text-xs text-slate-500 dark:text-slate-400">为空则使用后端配置默认值</p>
-              </label>
-              <label className="space-y-1">
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">默认最大页面数</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={defaultPages}
-                  onChange={(e) => setDefaultPages(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
-                  placeholder="如 1000"
-                />
-                <p className="text-xs text-slate-500 dark:text-slate-400">单个任务未填写时将继承此值</p>
-              </label>
-            </div>
-
             <div className="space-y-3">
               <label className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 px-2 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-200">
                     URL
                   </span>
-                  每行一个 URL（空行将被忽略）
+                  每行一个任务：名称 + URL（空行将被忽略）
                 </div>
                 <textarea
                   value={urlsText}
                   onChange={(e) => setUrlsText(e.target.value)}
-                  placeholder="https://example.com\nhttps://another.com/page"
+                  placeholder="华润医药 https://www.crpcg.com/\n信立泰 https://www.salubris.com/"
                   className="h-44 w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-relaxed outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:focus:border-indigo-400 dark:focus:ring-indigo-900"
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400">支持批量粘贴，提交时按行解析并自动跳过空行</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">支持批量粘贴，名称与 URL 之间可用空格或 Tab 分隔</p>
               </label>
             </div>
 
@@ -602,7 +565,7 @@ export default function TaskPage() {
               <h3 className="text-lg font-semibold">请求预览</h3>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              将按以下结构发送到 <code>{API_BASE}/api/tasks</code>，单个 URL 填写的覆盖参数会替换批量默认值。
+              将按以下结构发送到 <code>{API_BASE}/api/tasks</code>，每条记录包含 name 与 url。
             </p>
             <pre className="max-h-72 overflow-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100 shadow-inner">
               {payloadPreview}

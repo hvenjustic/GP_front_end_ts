@@ -24,6 +24,7 @@ type CrawlJobMeta = {
 type ResultItem = {
     id?: number | string;
     url?: string;
+    name?: string | null;
     site_name?: string | null;
     graph_json?: string | null;
     crawled_at?: string | null;
@@ -144,7 +145,7 @@ export default function ResultDetailClient() {
 
                 <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 space-y-4">
                     <div className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 md:grid-cols-2">
-                        <div>站点：{detail?.site_name ?? '—'}</div>
+                        <div>站点：{detail?.name ?? detail?.site_name ?? '—'}</div>
                         <div>URL：{detail?.url ?? '—'}</div>
                         <div>任务状态：{formatStatus(detail)}</div>
                         <div>重试次数：{detail?.crawl_count ?? 0}</div>
