@@ -20,6 +20,14 @@ const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 const PREVIEW_COUNT = 8;
 const POINT_PALETTE = ['#2563eb', '#0ea5e9', '#22c55e', '#f97316', '#e11d48', '#a855f7', '#14b8a6', '#f59e0b'];
 
+// Marker 可调参数（你可以在这里改数值来调试）
+// - MARKER_RADIUS: 点的半径（屏幕像素）
+// - MARKER_OPACITY: 点透明度
+// - MARKER_FIXED_SIZE: 是否让点大小不随地图缩放变化（true: 固定屏幕大小）
+const MARKER_RADIUS = 2;
+const MARKER_OPACITY = 0.85;
+const MARKER_FIXED_SIZE = true;
+
 type GraphLocateItem = {
   id: number;
   latitude: number;
@@ -104,7 +112,7 @@ export default function GraphClient() {
             coordinates: [longitude, latitude],
             longitude,
             latitude,
-            size: 5,
+            size: MARKER_RADIUS,
             color: POINT_PALETTE[index % POINT_PALETTE.length]
           };
         });
@@ -123,6 +131,7 @@ export default function GraphClient() {
 
   const preview = useMemo(() => points.slice(0, PREVIEW_COUNT), [points]);
   const remaining = Math.max(points.length - preview.length, 0);
+  const markerScale = useMemo(() => (MARKER_FIXED_SIZE ? 1 / Math.max(mapZoom, 0.1) : 1), [mapZoom]);
 
   const resetView = useCallback(() => {
     setSelectedCountry(null);
@@ -192,7 +201,15 @@ export default function GraphClient() {
               style={{ width: '100%', height: '100%' }}
               className="h-full w-full"
             >
-              <ZoomableGroup center={mapCenter} zoom={mapZoom} maxZoom={8}>
+              <ZoomableGroup
+                center={mapCenter}
+                zoom={mapZoom}
+                maxZoom={8}
+                onMove={({ zoom, coordinates }: { zoom: number; coordinates: [number, number] }) => {
+                  setMapZoom(zoom);
+                  setMapCenter(coordinates);
+                }}
+              >
                 <Geographies geography={GEO_URL}>
                   {({ geographies }: { geographies: any[] }) =>
                     geographies.map((geo: any) => {
@@ -207,7 +224,7 @@ export default function GraphClient() {
                             const centerLon = (bounds.minLon + bounds.maxLon) / 2;
                             const centerLat = (bounds.minLat + bounds.maxLat) / 2;
                             const span = Math.max(bounds.maxLon - bounds.minLon, bounds.maxLat - bounds.minLat);
-                            const nextZoom = clamp(60 / Math.max(span, 1), 1.2, 8);
+                            const nextZoom = clamp(240 / Math.max(span, 2), 1, 12);
                             setSelectedCountry(name ?? '未知');
                             setMapCenter([centerLon, centerLat]);
                             setMapZoom(nextZoom);
@@ -221,7 +238,9 @@ export default function GraphClient() {
                 {points.map((point) => (
                   <Marker key={point.id} coordinates={point.coordinates}>
                     <title>{point.name}</title>
-                    <circle r={point.size} fill={point.color} fillOpacity={0.85} stroke="#ffffff" strokeWidth={1} />
+                    <g transform={`scale(${markerScale})`}>
+                      <circle r={point.size} fill={point.color} fillOpacity={MARKER_OPACITY} />
+                    </g>
                   </Marker>
                 ))}
               </ZoomableGroup>
