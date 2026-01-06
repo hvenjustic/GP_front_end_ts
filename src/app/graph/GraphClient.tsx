@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 import { FiMapPin, FiRefreshCw } from 'react-icons/fi';
+
+import { API_BASE } from '@/config/api';
 
 type MapPoint = {
   id: string;
@@ -15,39 +17,64 @@ type MapPoint = {
 };
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
-const POINT_COUNT = 28;
 const PREVIEW_COUNT = 8;
 const POINT_PALETTE = ['#2563eb', '#0ea5e9', '#22c55e', '#f97316', '#e11d48', '#a855f7', '#14b8a6', '#f59e0b'];
 
-const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+type GraphLocateItem = {
+  id: number;
+  latitude: number;
+  longitude: number;
+};
 
-const generatePoints = (count: number): MapPoint[] =>
-  Array.from({ length: count }, (_, index) => {
-    const longitude = Number(randomInRange(-170, 170).toFixed(2));
-    const latitude = Number(randomInRange(-60, 75).toFixed(2));
-    return {
-      id: `point-${index + 1}`,
-      name: `点位 ${index + 1}`,
-      coordinates: [longitude, latitude],
-      longitude,
-      latitude,
-      size: Number(randomInRange(3, 7).toFixed(1)),
-      color: POINT_PALETTE[index % POINT_PALETTE.length]
-    };
-  });
+type GraphLocateResponse = {
+  items?: GraphLocateItem[];
+  total?: number;
+};
 
 export default function GraphClient() {
   const [points, setPoints] = useState<MapPoint[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const regeneratePoints = useCallback(() => {
-    setPoints(generatePoints(POINT_COUNT));
+  const fetchPoints = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/grap_locate`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const payload = (await res.json()) as GraphLocateResponse | GraphLocateItem[];
+      const items = Array.isArray(payload) ? payload : payload.items ?? [];
+      const next: MapPoint[] = items
+        .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
+        .map((item, index) => {
+          const longitude = Number(item.longitude.toFixed(6));
+          const latitude = Number(item.latitude.toFixed(6));
+          return {
+            id: String(item.id),
+            name: `任务 ${item.id}`,
+            coordinates: [longitude, latitude],
+            longitude,
+            latitude,
+            size: 5,
+            color: POINT_PALETTE[index % POINT_PALETTE.length]
+          };
+        });
+      setPoints(next);
+    } catch (e) {
+      setPoints([]);
+      setError(e instanceof Error ? e.message : '未知错误');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    regeneratePoints();
-  }, [regeneratePoints]);
+    fetchPoints();
+  }, [fetchPoints]);
 
-  const preview = points.slice(0, PREVIEW_COUNT);
+  const preview = useMemo(() => points.slice(0, PREVIEW_COUNT), [points]);
   const remaining = Math.max(points.length - preview.length, 0);
 
   return (
@@ -64,17 +91,18 @@ export default function GraphClient() {
                 Graph 地图：二维分布预览
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-                使用 react-simple-maps 渲染世界地图，随机生成点位以模拟图谱坐标或地理信号。
+                使用 react-simple-maps 渲染世界地图，从后端读取 site_task 的经纬度，展示真实点位分布。
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={regeneratePoints}
+            onClick={fetchPoints}
+            disabled={loading}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200 dark:hover:border-slate-600"
           >
             <FiRefreshCw className="h-4 w-4" />
-            重新生成点位
+            {loading ? '刷新中...' : '刷新点位'}
           </button>
         </div>
       </section>
@@ -114,18 +142,24 @@ export default function GraphClient() {
               ))}
             </ComposableMap>
           </div>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">地图数据来自 world-atlas，点位为前端随机生成。</p>
+          {error ? (
+            <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">点位加载失败：{error}</p>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              地图数据来自 world-atlas，点位来自后端 <code>/api/grap_locate</code>。
+            </p>
+          )}
         </div>
 
         <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">点位概览</p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {points.length ? `展示前 ${preview.length} 个点位` : '正在生成随机点位...'}
+            {loading ? '正在从后端加载点位...' : points.length ? `展示前 ${preview.length} 个点位` : '暂无点位（需要先提交任务并成功写入 geo_location）'}
           </p>
           <div className="mt-4 space-y-3">
             {points.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                生成中...
+                {loading ? '加载中...' : error ? '加载失败' : '暂无数据'}
               </div>
             ) : (
               preview.map((point) => (
