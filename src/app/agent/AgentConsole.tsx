@@ -15,6 +15,7 @@ import {
   FiShoppingCart,
   FiTrendingUp
 } from 'react-icons/fi';
+import { AGENT_API_BASE } from '@/config/api';
 
 type ChatMessage = {
   role: 'user' | 'agent';
@@ -128,7 +129,7 @@ export default function AgentConsole() {
   };
 
   const startSSEStream = (query: string) => {
-    const url = `/api/chat/agent/stream?message=${encodeURIComponent(query)}`;
+    const url = `${AGENT_API_BASE}/api/chat/agent/stream?message=${encodeURIComponent(query)}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
     setIsStreaming(true);
