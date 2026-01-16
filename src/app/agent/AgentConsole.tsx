@@ -12,7 +12,6 @@ import {
   FiMessageCircle,
   FiPackage,
   FiSend,
-  FiShoppingCart,
   FiTrendingUp
 } from 'react-icons/fi';
 import { AGENT_API_BASE } from '@/config/api';
@@ -46,13 +45,6 @@ const executionTimeline = [
   { label: '价格对比', status: '执行中', detail: '对接竞品 API 计算差价', time: '进行中', tone: 'indigo' },
   { label: '推荐生成', status: '排队', detail: '等待 LangChain 调用推荐链', time: '排队', tone: 'amber' },
   { label: '客服草稿', status: '待审', detail: '3 条回复等待人工确认', time: '5 分钟前', tone: 'slate' }
-];
-
-const initialChat: ChatMessage[] = [
-  { role: 'user', text: '帮我推荐 4000 元以内拍照好的手机，最好有分期' },
-  { role: 'agent', text: '已找到 3 款高分机型：小米 14、荣耀 200、三星 A55。需要偏好安卓还是 iOS？' },
-  { role: 'user', text: '安卓，并且电池大一些' },
-  { role: 'agent', text: '建议荣耀 200（5000mAh），附带 12 期免息。需要加购快充头和壳膜吗？' }
 ];
 
 const automations = [
@@ -89,11 +81,13 @@ const Card = ({ children, className = '' }: { children: ReactNode; className?: s
 );
 
 export default function AgentConsole() {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialChat);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const streamBufferRef = useRef('');
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
 
@@ -104,32 +98,24 @@ export default function AgentConsole() {
   }, []);
 
   const appendAgentToken = (delta: string) => {
-    setStreamBuffer((prev) => prev + delta);
+    streamBufferRef.current += delta;
+    setStreamBuffer(streamBufferRef.current);
   };
 
   const finalizeAgentMessage = (citations?: string[]) => {
-    setMessages((prev) => [...prev, { role: 'agent', text: streamBuffer || '（空响应）', citations }]);
+    const finalText = streamBufferRef.current;
+    setMessages((prev) => [...prev, { role: 'agent', text: finalText || '（空响应）', citations }]);
+    streamBufferRef.current = '';
     setStreamBuffer('');
     setIsStreaming(false);
   };
 
-  const startMockStream = () => {
-    setIsStreaming(true);
-    const mock = [
-      { delay: 200, delta: '收到，正在从知识图谱检索库存与竞品...' },
-      { delay: 900, delta: ' 推荐荣耀 200（5000mAh），华北仓现货；' },
-      { delay: 1500, delta: ' 可选 12 期免息，附带 65W 快充套装。' }
-    ];
-    mock.forEach(({ delay, delta }, idx) => {
-      setTimeout(() => {
-        appendAgentToken(delta);
-        if (idx === mock.length - 1) finalizeAgentMessage(['graph:stock', 'graph:pricing']);
-      }, delay);
-    });
-  };
-
   const startSSEStream = (query: string) => {
-    const url = `${AGENT_API_BASE}/api/chat/agent/stream?message=${encodeURIComponent(query)}`;
+    streamBufferRef.current = '';
+    setStreamBuffer('');
+    const params = new URLSearchParams({ message: query });
+    if (sessionId) params.set('session_id', sessionId);
+    const url = `${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
     setIsStreaming(true);
@@ -147,13 +133,18 @@ export default function AgentConsole() {
 
     es.addEventListener('meta', (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as StreamMeta;
-      console.info('stream meta', payload);
+      if (payload.label === 'session_id' && payload.value) {
+        setSessionId(payload.value);
+      }
     });
 
     es.onerror = () => {
-      console.warn('SSE 连接失败，使用 mock 流数据');
+      console.warn('SSE 连接失败');
       es.close();
-      startMockStream();
+      setIsStreaming(false);
+      streamBufferRef.current = '';
+      setStreamBuffer('');
+      setMessages((prev) => [...prev, { role: 'agent', text: '连接失败，请稍后重试。' }]);
     };
   };
 
@@ -357,32 +348,24 @@ export default function AgentConsole() {
                     </div>
                   )}
                 </div>
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-                    <FiShoppingCart className="h-4 w-4 text-indigo-500" />
-                    <span className="text-slate-600 dark:text-slate-300">
-                      示例：想买 4000 元内拍照好、续航大的安卓手机
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                      placeholder="输入你的问题，稍后对接 LangChain"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSend();
-                      }}
-                    />
-                    <button
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                      onClick={handleSend}
-                      disabled={!canSend}
-                    >
-                      发送
-                      <FiSend className="h-4 w-4" />
-                    </button>
-                  </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                    placeholder="输入你的问题"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSend();
+                    }}
+                  />
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                    onClick={handleSend}
+                    disabled={!canSend}
+                  >
+                    发送
+                    <FiSend className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </Card>
