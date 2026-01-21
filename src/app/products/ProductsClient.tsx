@@ -39,7 +39,7 @@ export default function ProductsClient() {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/results?page=1&page_size=100`, { cache: 'no-store' });
+      const res = await fetch(`${API_BASE}/api/products?page=1&page_size=100`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch tasks');
       const data = (await res.json()) as ListResultsResponse;
       setTasks(data.items || []);
