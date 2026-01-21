@@ -81,11 +81,13 @@ export default function ResultListClient() {
     const [detailData, setDetailData] = useState<ResultDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState('');
-    const [graphLoadingId, setGraphLoadingId] = useState<number | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [crawlSubmitting, setCrawlSubmitting] = useState(false);
     const [crawlFeedback, setCrawlFeedback] = useState('');
     const [crawlError, setCrawlError] = useState('');
+    const [graphSubmitting, setGraphSubmitting] = useState(false);
+    const [graphFeedback, setGraphFeedback] = useState('');
+    const [graphError, setGraphError] = useState('');
 
     const totalPages = useMemo(() => {
         if (!data) return 1;
@@ -177,6 +179,17 @@ export default function ResultListClient() {
         return item.is_crawled ? 'completed' : 'pending';
     };
 
+    const selectedItems = useMemo(() => {
+        if (!data?.items?.length) return [];
+        const idSet = new Set(selectedIds);
+        return data.items.filter((item) => idSet.has(item.id));
+    }, [data, selectedIds]);
+
+    const selectedGraphIds = useMemo(
+        () => selectedItems.filter(isCrawlDone).map((item) => item.id),
+        [selectedItems, isCrawlDone],
+    );
+
     const formatProgress = (job?: CrawlJobMeta | null) => {
         if (!job) return '—';
         if (job.discovered_count > 0) {
@@ -190,23 +203,28 @@ export default function ResultListClient() {
 
     const pickUpdatedAt = (item: ResultItem) => item.crawl_job?.updated_at || item.updated_at || null;
 
-    const handleBuildGraph = async (id: number) => {
-        setGraphLoadingId(id);
+    const handleBuildGraphBatch = async () => {
+        if (!selectedGraphIds.length) return;
+        setGraphSubmitting(true);
+        setGraphFeedback('');
+        setGraphError('');
         try {
-            const res = await fetch(`${API_BASE}/api/results/graph`, {
+            const res = await fetch(`${API_BASE}/api/results/graph/batch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id }),
+                body: JSON.stringify({ ids: selectedGraphIds }),
             });
             const json = (await res.json()) as QueueAckResponse & { error?: string };
             if (!res.ok) {
                 throw new Error(json?.error || '请求失败');
             }
-            alert(`图谱生成已入队，队列 ${json.queue_key} 待处理 ${json.pending ?? 0} 条`);
+            setGraphFeedback(`图谱生成已入队 ${json.queued} 条，当前待处理 ${json.pending ?? 0} 条`);
+            setSelectedIds((prev) => prev.filter((id) => !selectedGraphIds.includes(id)));
+            fetchList();
         } catch (e) {
-            alert(`图谱生成失败：${e instanceof Error ? e.message : '未知错误'}`);
+            setGraphError(e instanceof Error ? e.message : '未知错误');
         } finally {
-            setGraphLoadingId(null);
+            setGraphSubmitting(false);
         }
     };
 
@@ -250,11 +268,24 @@ export default function ResultListClient() {
                             Crawl{selectedIds.length ? ` (${selectedIds.length})` : ''}
                         </button>
                         <button
+                            onClick={handleBuildGraphBatch}
+                            disabled={graphSubmitting || selectedGraphIds.length === 0}
+                            title={
+                                selectedIds.length > 0 && selectedGraphIds.length === 0
+                                    ? '请先选择已完成爬取的任务'
+                                    : undefined
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200 dark:hover:border-indigo-700"
+                        >
+                            <FiRefreshCw className={`h-4 w-4 ${graphSubmitting ? 'animate-spin' : ''}`} />
+                            Graph{selectedGraphIds.length ? ` (${selectedGraphIds.length})` : ''}
+                        </button>
+                        <button
                             onClick={fetchList}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
                         >
                             <FiRefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            刷新
+                            Flush
                         </button>
                     </div>
                 </div>
@@ -269,6 +300,16 @@ export default function ResultListClient() {
                     {crawlFeedback && (
                         <div className="border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-700">
                             {crawlFeedback}
+                        </div>
+                    )}
+                    {graphError && (
+                        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                            图谱生成失败：{graphError}
+                        </div>
+                    )}
+                    {graphFeedback && (
+                        <div className="border-b border-indigo-200 bg-indigo-50 px-5 py-3 text-sm text-indigo-700">
+                            {graphFeedback}
                         </div>
                     )}
                     <div className="overflow-auto">
@@ -325,15 +366,6 @@ export default function ResultListClient() {
                                                 >
                                                     <FiInfo className="h-3 w-3" />
                                                     详情
-                                                </button>
-                                                <button
-                                                    onClick={() => handleBuildGraph(item.id)}
-                                                    disabled={graphLoadingId === item.id || !isCrawlDone(item)}
-                                                    title={!isCrawlDone(item) ? '任务未完成，暂不可抽取' : undefined}
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200 dark:hover:border-emerald-700"
-                                                >
-                                                    <FiRefreshCw className={`h-3 w-3 ${graphLoadingId === item.id ? 'animate-spin' : ''}`} />
-                                                    图谱生成
                                                 </button>
                                             </div>
                                         </td>
