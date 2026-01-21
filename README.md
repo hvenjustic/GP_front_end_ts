@@ -20,7 +20,7 @@
 ## 爬虫任务与结果页
 - 任务页：`/task`（提交任务、查看队列剩余）
 - 结果页：`/result`（分页列表 + 点击查看详情）
-- 后端地址通过环境变量配置：`NEXT_PUBLIC_GO_API`（默认 `http://localhost:5010`）
+- 后端地址通过环境变量配置：`NEXT_PUBLIC_PY_API`（默认 `http://localhost:8000`）
 
 ## 目录提示
 - `src/app/page.tsx`：主页与主要界面逻辑。

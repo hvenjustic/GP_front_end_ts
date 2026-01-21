@@ -247,7 +247,7 @@ export default function TaskPage() {
               </h1>
               <p className="max-w-3xl text-lg text-slate-600 dark:text-slate-300">
                 调用后端 <code>/api/tasks</code> 接口批量录入站点任务，录入后可在结果页勾选并点击 <strong>Crawl</strong> 开始入队。
-                队列状态仍可通过 <code>/api/tasks/status</code> 查看，后端地址统一在 <code>src/config/api.ts</code> 中配置，也可通过环境变量 <code>NEXT_PUBLIC_GO_API</code> 覆盖。
+                队列状态仍可通过 <code>/api/tasks/status</code> 查看，后端地址统一在 <code>src/config/api.ts</code> 中配置，也可通过环境变量 <code>NEXT_PUBLIC_PY_API</code> 覆盖。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
