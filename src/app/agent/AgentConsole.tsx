@@ -105,6 +105,8 @@ const toneColor: Record<string, string> = {
   slate: 'text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50'
 };
 
+const AGENT_STORAGE_KEY = 'agent_console_state_v1';
+
 const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
   <div
     className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
@@ -135,6 +137,41 @@ export default function AgentConsole() {
   const streamBufferRef = useRef('');
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(AGENT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        messages?: ChatMessage[];
+        sessionId?: string | null;
+        activeSessionTitle?: string | null;
+      };
+      if (Array.isArray(parsed.messages)) {
+        const safeMessages = parsed.messages.filter(
+          (item) => item && (item.role === 'user' || item.role === 'agent') && typeof item.text === 'string'
+        );
+        if (safeMessages.length > 0) {
+          setMessages(safeMessages);
+        }
+      }
+      if (typeof parsed.sessionId === 'string') {
+        setSessionId(parsed.sessionId);
+      }
+      if (typeof parsed.activeSessionTitle === 'string') {
+        setActiveSessionTitle(parsed.activeSessionTitle);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        AGENT_STORAGE_KEY,
+        JSON.stringify({ messages, sessionId, activeSessionTitle })
+      );
+    } catch {}
+  }, [messages, sessionId, activeSessionTitle]);
 
   useEffect(() => {
     return () => {
@@ -291,6 +328,9 @@ export default function AgentConsole() {
     setSessionId(null);
     setActiveSessionTitle(null);
     closeHistory();
+    try {
+      sessionStorage.removeItem(AGENT_STORAGE_KEY);
+    } catch {}
   };
 
   const mapHistoryMessages = (items: AgentMessage[]) => {
@@ -661,7 +701,7 @@ export default function AgentConsole() {
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
                   {messages.map((msg, idx) => (
-                    <div key={`${msg.role}-${idx}`} className={`flex ${msg.role === 'agent' ? 'justify-end' : 'justify-start'}`}>
+                    <div key={`${msg.role}-${idx}`} className={`flex ${msg.role === 'agent' ? 'justify-start' : 'justify-end'}`}>
                       <div
                         className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
                           msg.role === 'agent'
@@ -679,7 +719,7 @@ export default function AgentConsole() {
                     </div>
                   ))}
                   {isStreaming && (
-                    <div className="flex justify-end">
+                    <div className="flex justify-start">
                       <div className="max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white shadow-sm">
                         {streamBuffer || 'Agent 正在回应...'}
                       </div>
