@@ -259,6 +259,12 @@ export default function AgentConsole() {
     startSSEStream(text);
   };
 
+  const sendQuickMessage = (text: string) => {
+    if (!text.trim() || isStreaming) return;
+    setMessages((prev) => [...prev, { role: 'user', text }]);
+    startSSEStream(text.trim());
+  };
+
   const fetchSessions = async () => {
     setHistoryLoading(true);
     setHistoryError('');
@@ -310,6 +316,21 @@ export default function AgentConsole() {
     } finally {
       setReviewUpdatingId(null);
     }
+  };
+
+  const handleFetchBuildable = () => {
+    sendQuickMessage('列出可构建的任务列表');
+  };
+
+  const handleBatchBuild = () => {
+    const raw = window.prompt('请输入任务 ID，多个用英文逗号分隔');
+    if (!raw) return;
+    const ids = raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item);
+    if (!ids.length) return;
+    sendQuickMessage(`构建图谱任务 ${ids.join(', ')}`);
   };
 
   const openHistory = () => {
@@ -501,6 +522,20 @@ export default function AgentConsole() {
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-100">
                   待上架 {reviewTotal}
                 </span>
+              </div>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  onClick={handleFetchBuildable}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:border-slate-600"
+                >
+                  可构建任务列表
+                </button>
+                <button
+                  onClick={handleBatchBuild}
+                  className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                >
+                  批量构建
+                </button>
               </div>
               <div className="space-y-3">
                 {reviewLoading && (
