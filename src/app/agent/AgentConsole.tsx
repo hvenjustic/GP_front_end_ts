@@ -11,6 +11,7 @@ import {
   FiDatabase,
   FiMessageCircle,
   FiPackage,
+  FiRefreshCw,
   FiSend,
   FiTrendingUp
 } from 'react-icons/fi';
@@ -20,6 +21,26 @@ type ChatMessage = {
   role: 'user' | 'agent';
   text: string;
   citations?: string[];
+};
+
+type AgentSession = {
+  session_id: string;
+  title: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type AgentMessage = {
+  id: number;
+  role: string;
+  content?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+
+type AgentSessionDetailResponse = {
+  session: AgentSession;
+  messages: AgentMessage[];
 };
 
 type StreamToken = {
@@ -86,6 +107,12 @@ export default function AgentConsole() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [sessions, setSessions] = useState<AgentSession[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyDetailLoadingId, setHistoryDetailLoadingId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
 
@@ -96,6 +123,22 @@ export default function AgentConsole() {
       eventSourceRef.current?.close();
     };
   }, []);
+
+  const formatTime = (value?: string | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  };
+
+  const stopStream = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    streamBufferRef.current = '';
+    setStreamBuffer('');
+    setIsStreaming(false);
+  };
 
   const appendAgentToken = (delta: string) => {
     streamBufferRef.current += delta;
@@ -111,6 +154,7 @@ export default function AgentConsole() {
   };
 
   const startSSEStream = (query: string) => {
+    stopStream();
     streamBufferRef.current = '';
     setStreamBuffer('');
     const params = new URLSearchParams({ message: query });
@@ -129,6 +173,7 @@ export default function AgentConsole() {
       const payload = JSON.parse((event as MessageEvent<string>).data) as StreamDone;
       finalizeAgentMessage(payload.citations);
       es.close();
+      eventSourceRef.current = null;
     });
 
     es.addEventListener('meta', (event) => {
@@ -141,9 +186,8 @@ export default function AgentConsole() {
     es.onerror = () => {
       console.warn('SSE 连接失败');
       es.close();
-      setIsStreaming(false);
-      streamBufferRef.current = '';
-      setStreamBuffer('');
+      eventSourceRef.current = null;
+      stopStream();
       setMessages((prev) => [...prev, { role: 'agent', text: '连接失败，请稍后重试。' }]);
     };
   };
@@ -154,6 +198,70 @@ export default function AgentConsole() {
     setMessages((prev) => [...prev, { role: 'user', text }]);
     setInput('');
     startSSEStream(text);
+  };
+
+  const fetchSessions = async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions?limit=50`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`请求失败：${res.status}`);
+      const json = (await res.json()) as AgentSession[];
+      setSessions(json || []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : '未知错误');
+      setSessions([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const openHistory = () => {
+    setHistoryOpen(true);
+    fetchSessions();
+  };
+
+  const closeHistory = () => {
+    setHistoryOpen(false);
+    setHistoryError('');
+  };
+
+  const resetChat = () => {
+    stopStream();
+    setMessages([]);
+    setSessionId(null);
+    setActiveSessionTitle(null);
+    closeHistory();
+  };
+
+  const mapHistoryMessages = (items: AgentMessage[]) => {
+    const mapped: ChatMessage[] = [];
+    items.forEach((item) => {
+      const role = item.role === 'assistant' ? 'agent' : item.role === 'user' ? 'user' : null;
+      if (!role) return;
+      const text = (item.content || '').trim();
+      mapped.push({ role, text: text || '（空响应）' });
+    });
+    return mapped;
+  };
+
+  const loadHistorySession = async (session: AgentSession) => {
+    setHistoryDetailLoadingId(session.session_id);
+    setHistoryError('');
+    try {
+      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`请求失败：${res.status}`);
+      const json = (await res.json()) as AgentSessionDetailResponse;
+      stopStream();
+      setMessages(mapHistoryMessages(json.messages || []));
+      setSessionId(json.session.session_id);
+      setActiveSessionTitle(json.session.title || null);
+      setHistoryOpen(false);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setHistoryDetailLoadingId(null);
+    }
   };
 
   return (
@@ -310,15 +418,109 @@ export default function AgentConsole() {
 
           {/* 聊天交互（占 1/2，右侧全高） */}
           <div className="flex min-h-0 w-full">
-            <Card className="h-full w-full">
+            <Card className="relative h-full w-full">
+              {historyOpen && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4">
+                  <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">历史对话</div>
+                      <button
+                        onClick={closeHistory}
+                        className="rounded-lg px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        关闭
+                      </button>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <button
+                        onClick={resetChat}
+                        className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 transition hover:border-indigo-300 dark:border-indigo-700 dark:text-indigo-200"
+                      >
+                        新对话
+                      </button>
+                      <button
+                        onClick={fetchSessions}
+                        disabled={historyLoading}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
+                      >
+                        <FiRefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                        刷新
+                      </button>
+                    </div>
+                    {historyError && (
+                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200">
+                        {historyError}
+                      </div>
+                    )}
+                    <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto">
+                      {historyLoading && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
+                          加载中...
+                        </div>
+                      )}
+                      {!historyLoading && sessions.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
+                          暂无历史对话
+                        </div>
+                      )}
+                      {sessions.map((session) => {
+                        const updatedLabel = formatTime(session.updated_at || session.created_at);
+                        const isActive = session.session_id === sessionId;
+                        const isLoading = historyDetailLoadingId === session.session_id;
+                        return (
+                          <button
+                            key={session.session_id}
+                            onClick={() => loadHistorySession(session)}
+                            disabled={isLoading}
+                            className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
+                              isActive
+                                ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-100'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold">
+                                {session.title || '未命名对话'}
+                              </span>
+                              <span className="text-[11px] text-slate-500">{updatedLabel}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                              <span>{session.session_id.slice(0, 8)}...</span>
+                              {isLoading && <span>加载中…</span>}
+                              {isActive && !isLoading && <span>当前对话</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
                   <FiMessageCircle className="h-4 w-4 text-indigo-500" />
                   用户对话
                 </div>
-                <span className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
-                  Chat
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openHistory}
+                    className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-600 transition hover:border-indigo-300 dark:border-indigo-700 dark:text-indigo-200"
+                  >
+                    <FiClock className="h-3.5 w-3.5" />
+                    历史
+                  </button>
+                  {activeSessionTitle && (
+                    <span
+                      title={activeSessionTitle}
+                      className="max-w-[160px] truncate rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                    >
+                      当前：{activeSessionTitle}
+                    </span>
+                  )}
+                  <span className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    Chat
+                  </span>
+                </div>
               </div>
               <div className="flex h-full min-h-0 flex-col">
                 <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
