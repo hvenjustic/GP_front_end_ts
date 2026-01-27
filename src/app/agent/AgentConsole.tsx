@@ -44,6 +44,23 @@ type AgentSessionDetailResponse = {
   messages: AgentMessage[];
 };
 
+type ReviewItem = {
+  id: number;
+  name?: string | null;
+  site_name?: string | null;
+  url: string;
+  llm_processed_at?: string | null;
+  updated_at?: string | null;
+  on_sale: boolean;
+};
+
+type ReviewResponse = {
+  items: ReviewItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 type StreamToken = {
   type: 'token';
   delta: string;
@@ -73,12 +90,6 @@ const automations = [
   { title: '库存巡检与自动上架', status: '监控中', owner: '运营 Agent', steps: ['读取库存节点', '触发补货工单', '库存恢复自动上架'] },
   { title: '智能调价与关联推荐', status: '试运行', owner: '定价 Agent', steps: ['竞品比价', '生成加购/替代推荐', '等待确认执行'] },
   { title: '客服对话助手', status: '活跃', owner: '对话 Agent', steps: ['意图识别', '知识检索', '多轮回复草稿'] }
-];
-
-const workQueue = [
-  { title: '补货申请 · AirPods Pro 2', detail: '库存 < 5 · 华北仓', eta: '等待确认', priority: '高' },
-  { title: '上架草案 · 小米 14 Ultra', detail: '规格/图像已整理', eta: '10 分钟前', priority: '中' },
-  { title: '调价建议 · Galaxy S24', detail: '比竞品高 12% · 建议降价 600 元', eta: '5 分钟前', priority: '高' }
 ];
 
 const liveStats = [
@@ -115,6 +126,11 @@ export default function AgentConsole() {
   const [historyError, setHistoryError] = useState('');
   const [historyDetailLoadingId, setHistoryDetailLoadingId] = useState<string | null>(null);
   const [historyDeletingId, setHistoryDeletingId] = useState<string | null>(null);
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [reviewTotal, setReviewTotal] = useState(0);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewUpdatingId, setReviewUpdatingId] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
 
@@ -124,6 +140,10 @@ export default function AgentConsole() {
     return () => {
       eventSourceRef.current?.close();
     };
+  }, []);
+
+  useEffect(() => {
+    fetchReviewItems();
   }, []);
 
   const formatTime = (value?: string | null) => {
@@ -215,6 +235,43 @@ export default function AgentConsole() {
       setSessions([]);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const fetchReviewItems = async () => {
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      const res = await fetch(`${AGENT_API_BASE}/api/products/review?page=1&page_size=20`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`请求失败：${res.status}`);
+      const json = (await res.json()) as ReviewResponse;
+      setReviewItems(json.items || []);
+      setReviewTotal(Number.isFinite(json.total) ? json.total : (json.items || []).length);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : '未知错误');
+      setReviewItems([]);
+      setReviewTotal(0);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleSetOnSale = async (taskId: number) => {
+    if (reviewUpdatingId) return;
+    setReviewUpdatingId(taskId);
+    setReviewError('');
+    try {
+      const res = await fetch(`${AGENT_API_BASE}/api/products/on_sale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [taskId] })
+      });
+      if (!res.ok) throw new Error(`请求失败：${res.status}`);
+      await fetchReviewItems();
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setReviewUpdatingId(null);
     }
   };
 
@@ -402,29 +459,53 @@ export default function AgentConsole() {
                   审核待办
                 </div>
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-100">
-                  需人工确认
+                  待上架 {reviewTotal}
                 </span>
               </div>
               <div className="space-y-3">
-                {workQueue.map((item) => (
-                  <div
-                    key={item.title}
-                    className="rounded-xl border border-slate-200/70 p-3 shadow-sm dark:border-slate-800/70"
-                  >
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.title}</p>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">{item.detail}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">更新: {item.eta}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
-                        <FiClock className="h-4 w-4" />
-                        {item.priority}
-                      </span>
-                      <button className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
-                        审核
-                      </button>
-                    </div>
+                {reviewLoading && (
+                  <div className="rounded-xl border border-slate-200/70 bg-white/70 p-3 text-xs text-slate-500 dark:border-slate-800/70 dark:bg-slate-800/50 dark:text-slate-300">
+                    加载中...
                   </div>
-                ))}
+                )}
+                {!reviewLoading && reviewError && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-200">
+                    {reviewError}
+                  </div>
+                )}
+                {!reviewLoading && !reviewError && reviewItems.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
+                    暂无待上架商品
+                  </div>
+                )}
+                {reviewItems.map((item) => {
+                  const title = item.name || item.site_name || '待上架商品';
+                  const updatedLabel = formatTime(item.llm_processed_at || item.updated_at);
+                  const isUpdating = reviewUpdatingId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-slate-200/70 p-3 shadow-sm dark:border-slate-800/70"
+                    >
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-300">{item.url}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">图谱完成: {updatedLabel}</p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                          <FiClock className="h-4 w-4" />
+                          待上架
+                        </span>
+                        <button
+                          onClick={() => handleSetOnSale(item.id)}
+                          disabled={isUpdating}
+                          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                        >
+                          {isUpdating ? '上架中...' : '上架'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 
