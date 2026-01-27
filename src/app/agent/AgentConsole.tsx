@@ -13,6 +13,7 @@ import {
   FiPackage,
   FiRefreshCw,
   FiSend,
+  FiTrash2,
   FiTrendingUp
 } from 'react-icons/fi';
 import { AGENT_API_BASE } from '@/config/api';
@@ -113,6 +114,7 @@ export default function AgentConsole() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historyDetailLoadingId, setHistoryDetailLoadingId] = useState<string | null>(null);
+  const [historyDeletingId, setHistoryDeletingId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
 
@@ -261,6 +263,48 @@ export default function AgentConsole() {
       setHistoryError(error instanceof Error ? error.message : '未知错误');
     } finally {
       setHistoryDetailLoadingId(null);
+    }
+  };
+
+  const deleteHistorySession = async (session: AgentSession) => {
+    if (!session.session_id) {
+      return;
+    }
+    if (isStreaming) {
+      setHistoryError('正在对话中，无法删除当前会话。');
+      return;
+    }
+    const titleLabel = session.title || '未命名对话';
+    const confirmed = window.confirm(`确定删除对话「${titleLabel}」吗？此操作不可恢复。`);
+    if (!confirmed) {
+      return;
+    }
+    setHistoryDeletingId(session.session_id);
+    setHistoryError('');
+    try {
+      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        let message = '删除失败';
+        try {
+          const payload = await res.json();
+          if (payload?.detail) {
+            message = payload.detail;
+          }
+        } catch {}
+        throw new Error(message);
+      }
+      setSessions((prev) => prev.filter((item) => item.session_id !== session.session_id));
+      if (sessionId === session.session_id) {
+        setSessionId(null);
+        setActiveSessionTitle(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : '未知错误');
+    } finally {
+      setHistoryDeletingId(null);
     }
   };
 
@@ -467,29 +511,40 @@ export default function AgentConsole() {
                         const updatedLabel = formatTime(session.updated_at || session.created_at);
                         const isActive = session.session_id === sessionId;
                         const isLoading = historyDetailLoadingId === session.session_id;
+                        const isDeleting = historyDeletingId === session.session_id;
                         return (
-                          <button
+                          <div
                             key={session.session_id}
-                            onClick={() => loadHistorySession(session)}
-                            disabled={isLoading}
-                            className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${
-                              isActive
-                                ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-100'
-                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300'
-                            }`}
+                            className="flex items-center gap-2"
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-semibold">
-                                {session.title || '未命名对话'}
-                              </span>
-                              <span className="text-[11px] text-slate-500">{updatedLabel}</span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-                              <span>{session.session_id.slice(0, 8)}...</span>
-                              {isLoading && <span>加载中…</span>}
-                              {isActive && !isLoading && <span>当前对话</span>}
-                            </div>
-                          </button>
+                            <button
+                              onClick={() => loadHistorySession(session)}
+                              disabled={isLoading || isDeleting}
+                              className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                                isActive
+                                  ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-100'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-semibold">
+                                  {session.title || '未命名对话'}
+                                </span>
+                                <span className="text-[11px] text-slate-500">
+                                  {isLoading ? '加载中…' : updatedLabel}
+                                </span>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteHistorySession(session)}
+                              disabled={isLoading || isDeleting}
+                              aria-label="删除对话"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-500 transition hover:border-rose-300 hover:text-rose-600 disabled:opacity-60 dark:border-rose-800/60 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:text-rose-200"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
