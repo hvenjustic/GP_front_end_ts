@@ -703,49 +703,51 @@ export default function AgentConsole() {
 
           {/* 聊天交互（占 1/2，右侧全高） */}
           <div className="flex min-h-0 w-full">
-            <Card className="relative h-full w-full">
+            <Card className="relative h-full w-full !p-0 overflow-hidden flex flex-col bg-gradient-to-b from-sky-50 to-white shadow-xl border-none">
               {historyOpen && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4">
-                  <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
+                  <div className="w-full max-w-md rounded-2xl border border-white/80 bg-white/90 p-5 shadow-2xl backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white">历史对话</div>
+                      <div className="text-lg font-bold text-slate-800 dark:text-white">历史对话</div>
                       <button
                         onClick={closeHistory}
-                        className="rounded-lg px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
                       >
                         关闭
                       </button>
                     </div>
-                    <div className="mt-3 flex items-center justify-between">
+                    <div className="mt-4 flex items-center justify-between">
                       <button
                         onClick={resetChat}
-                        className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 transition hover:border-indigo-300 dark:border-indigo-700 dark:text-indigo-200"
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-200"
                       >
+                        <FiMessageCircle className="h-3.5 w-3.5" />
                         新对话
                       </button>
                       <button
                         onClick={fetchSessions}
                         disabled={historyLoading}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
                       >
                         <FiRefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
                         刷新
                       </button>
                     </div>
                     {historyError && (
-                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200">
+                      <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200">
                         {historyError}
                       </div>
                     )}
-                    <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto">
+                    <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
                       {historyLoading && (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300">
-                          加载中...
+                        <div className="flex items-center justify-center py-8 text-slate-400">
+                          <FiRefreshCw className="mr-2 h-4 w-4 animate-spin" /> 加载中...
                         </div>
                       )}
                       {!historyLoading && sessions.length === 0 && (
-                        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
-                          暂无历史对话
+                        <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                          <FiMessageCircle className="mb-2 h-8 w-8 opacity-20" />
+                          <p className="text-xs">暂无历史对话</p>
                         </div>
                       )}
                       {sessions.map((session) => {
@@ -756,22 +758,21 @@ export default function AgentConsole() {
                         return (
                           <div
                             key={session.session_id}
-                            className="flex items-center gap-2"
+                            className="group flex items-center gap-2"
                           >
                             <button
                               onClick={() => loadHistorySession(session)}
                               disabled={isLoading || isDeleting}
-                              className={`flex-1 rounded-xl border px-3 py-2 text-left text-xs transition ${
-                                isActive
-                                  ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-100'
-                                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300'
-                              }`}
+                              className={`flex-1 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${isActive
+                                  ? 'border-indigo-200 bg-indigo-50 shadow-sm ring-1 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-900/30'
+                                  : 'border-transparent bg-slate-50 hover:bg-slate-100 hover:shadow-sm dark:bg-slate-800/50 dark:hover:bg-slate-800'
+                                }`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-semibold">
+                                <span className={`text-sm font-medium ${isActive ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-700 dark:text-slate-200'}`}>
                                   {session.title || '未命名对话'}
                                 </span>
-                                <span className="text-[11px] text-slate-500">
+                                <span className="text-[10px] text-slate-400">
                                   {isLoading ? '加载中…' : updatedLabel}
                                 </span>
                               </div>
@@ -781,7 +782,7 @@ export default function AgentConsole() {
                               onClick={() => deleteHistorySession(session)}
                               disabled={isLoading || isDeleting}
                               aria-label="删除对话"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 text-rose-500 transition hover:border-rose-300 hover:text-rose-600 disabled:opacity-60 dark:border-rose-800/60 dark:text-rose-300 dark:hover:border-rose-700 dark:hover:text-rose-200"
+                              className="invisible inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:visible group-hover:opacity-100 dark:hover:bg-rose-900/30 dark:hover:text-rose-300"
                             >
                               <FiTrash2 className="h-4 w-4" />
                             </button>
@@ -792,108 +793,124 @@ export default function AgentConsole() {
                   </div>
                 </div>
               )}
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                  <FiMessageCircle className="h-4 w-4 text-indigo-500" />
-                  用户对话
+
+              {/* Chat Header */}
+              <div className="flex shrink-0 items-center justify-between border-b border-sky-100 bg-white/60 px-5 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
+                    <FiMessageCircle className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-800 dark:text-white">智能助手</span>
+                    {activeSessionTitle && (
+                      <span className="text-[10px] text-slate-500 truncate max-w-[200px]">{activeSessionTitle}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={openHistory}
-                    className="inline-flex items-center gap-1 rounded-full border border-indigo-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-600 transition hover:border-indigo-300 dark:border-indigo-700 dark:text-indigo-200"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-indigo-600 hover:ring-indigo-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
                   >
                     <FiClock className="h-3.5 w-3.5" />
                     历史
                   </button>
-                  {activeSessionTitle && (
-                    <span
-                      title={activeSessionTitle}
-                      className="max-w-[160px] truncate rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300"
-                    >
-                      当前：{activeSessionTitle}
-                    </span>
-                  )}
-                  <span className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
-                    Chat
-                  </span>
                 </div>
               </div>
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="flex flex-1 min-h-0 flex-col rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
-                  <div className="flex-1 space-y-3 overflow-y-auto">
+
+              {/* Chat Messages Area */}
+              <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+                <div className="mx-auto max-w-3xl space-y-6">
                   {messages.map((msg, idx) => (
-                    <div key={`${msg.role}-${idx}`} className={`flex ${msg.role === 'agent' ? 'justify-start' : 'justify-end'}`}>
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                          msg.role === 'agent'
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
-                        }`}
-                      >
-                        <p>{msg.text}</p>
-                        {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
-                          <details className="mt-2 rounded-lg border border-white/20 bg-black/10 p-2" open={idx === messages.length - 1}>
-                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-indigo-100">
-                              Thought Process ({msg.traces.length})
-                            </summary>
-                            <div className="mt-2 space-y-1 text-[11px] text-indigo-100">
-                              {msg.traces.map((trace, traceIdx) => (
-                                <div key={`${idx}-trace-${traceIdx}`} className="rounded border border-white/10 bg-black/10 px-2 py-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold">{trace.stage || 'process'}</span>
-                                    {trace.time && <span className="opacity-75">{formatTime(trace.time)}</span>}
-                                  </div>
-                                  <div className="mt-1 whitespace-pre-wrap break-words">{trace.step}</div>
+                    <div key={`${msg.role}-${idx}`} className={`flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
+                      {/* Agent Thinking Box */}
+                      {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
+                        <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-sky-100 bg-sky-50/80 p-3 backdrop-blur-sm transition-all duration-500 dark:border-sky-900/30 dark:bg-sky-900/20">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                            <div className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+                            思考过程
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {msg.traces.map((trace, traceIdx) => (
+                              <div key={`${idx}-trace-${traceIdx}`} className="group relative border-l-2 border-sky-200 pl-3 transition-all hover:border-sky-400 dark:border-sky-800">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '分析中'}</span>
+                                  {trace.time && <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100">{formatTime(trace.time)}</span>}
                                 </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
+                                <div className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{trace.step}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Message Bubble */}
+                      <div
+                        className={`relative max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
+                            ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                            : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
+                          }`}
+                      >
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
                         {msg.citations && msg.citations.length > 0 && (
-                          <p className="mt-1 text-[11px] text-indigo-100 dark:text-indigo-200">
-                            引用: {msg.citations.join(', ')}
-                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
+                            {msg.citations.map((cite, i) => (
+                              <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
+                                引用 {i + 1}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </div>
                   ))}
+
+                  {/* Streaming State */}
                   {isStreaming && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white shadow-sm">
-                        {streamTraces.length > 0 && (
-                          <details className="mb-2 rounded-lg border border-white/20 bg-black/10 p-2" open>
-                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-indigo-100">
-                              Thought Process ({streamTraces.length})
-                            </summary>
-                            <div className="mt-2 space-y-1 text-[11px] text-indigo-100">
-                              {streamTraces.slice(-6).map((trace, traceIdx) => (
-                                <div key={`stream-trace-${traceIdx}`} className="rounded border border-white/10 bg-black/10 px-2 py-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="font-semibold">{trace.stage || 'process'}</span>
-                                    {trace.time && <span className="opacity-75">{formatTime(trace.time)}</span>}
-                                  </div>
-                                  <div className="mt-1 whitespace-pre-wrap break-words">{trace.step}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
+                    <div className="flex flex-col items-start">
+                      {/* Streaming Thinking */}
+                      {(streamTraces.length > 0) && (
+                        <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-amber-100 bg-amber-50/80 p-3 backdrop-blur-sm transition-all duration-300 dark:border-amber-900/30 dark:bg-amber-900/20">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                            <FiRefreshCw className="h-3 w-3 animate-spin" />
+                            正在思考...
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {streamTraces.slice(-3).map((trace, traceIdx) => (
+                              <div key={`stream-trace-${traceIdx}`} className="border-l-2 border-amber-200 pl-3 transition-all duration-500 dark:border-amber-800">
+                                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '处理中'}</div>
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400">{trace.step}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Streaming Message Bubble */}
+                      <div className="relative max-w-[85%] rounded-2xl rounded-tl-none border border-slate-100 bg-white px-5 py-3 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100">
                         {streamBuffer ? (
-                          streamBuffer
+                          <span className="whitespace-pre-wrap">{streamBuffer}</span>
                         ) : (
-                          <span className="inline-block animate-shimmer bg-gradient-to-r from-white/40 via-white to-white/40 bg-[length:200%_auto] bg-clip-text text-transparent">
-                            processing...
-                          </span>
+                          <div className="flex items-center gap-1 py-1">
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
+                          </div>
                         )}
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
-                  </div>
-                  <div className="mt-3 flex gap-2 border-t border-slate-200/60 pt-3 dark:border-slate-800/60">
+                  <div ref={messagesEndRef} className="h-4" />
+                </div>
+              </div>
+
+              {/* Input Area */}
+              <div className="shrink-0 bg-white/80 p-4 backdrop-blur dark:bg-slate-900/80">
+                <div className="mx-auto max-w-3xl">
+                  <div className="relative flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
                     <input
-                      className="flex-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                      placeholder="输入你的问题"
+                      className="flex-1 bg-transparent px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
+                      placeholder="输入您的问题..."
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -901,13 +918,16 @@ export default function AgentConsole() {
                       }}
                     />
                     <button
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                      className={`group flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white transition-all hover:bg-indigo-700 ${!canSend ? 'cursor-not-allowed opacity-50 bg-slate-400' : 'shadow-md shadow-indigo-200 dark:shadow-none'
+                        }`}
                       onClick={handleSend}
                       disabled={!canSend}
                     >
-                      发送
-                      <FiSend className="h-4 w-4" />
+                      <FiSend className={`h-4 w-4 transition-transform ${canSend ? 'group-hover:translate-x-0.5 group-hover:-translate-y-0.5' : ''}`} />
                     </button>
+                  </div>
+                  <div className="mt-2 text-center text-[10px] text-slate-400">
+                    AI 可能会生成错误信息，请核对重要事实
                   </div>
                 </div>
               </div>
