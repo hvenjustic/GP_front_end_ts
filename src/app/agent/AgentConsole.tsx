@@ -742,7 +742,13 @@ export default function AgentConsole() {
                   {isStreaming && (
                     <div className="flex justify-start">
                       <div className="max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white shadow-sm">
-                        {streamBuffer || 'Agent 正在回应...'}
+                        {streamBuffer ? (
+                          streamBuffer
+                        ) : (
+                          <span className="inline-block animate-shimmer bg-gradient-to-r from-white/40 via-white to-white/40 bg-[length:200%_auto] bg-clip-text text-transparent">
+                            processing...
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
