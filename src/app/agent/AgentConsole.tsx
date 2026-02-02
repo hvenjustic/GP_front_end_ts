@@ -135,6 +135,15 @@ export default function AgentConsole() {
   const [reviewUpdatingId, setReviewUpdatingId] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamBuffer, isStreaming]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
 
@@ -427,34 +436,10 @@ export default function AgentConsole() {
   };
 
   return (
-    <div className="relative isolate h-[calc(100vh-80px)] overflow-hidden px-6 pb-0">
-      <section className="mx-auto mt-4 flex h-full max-w-[108rem] flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-6 shadow-lg backdrop-blur md:p-8 dark:border-white/10 dark:bg-slate-900/80">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200">
-              <FiCpu className="h-4 w-4" />
-              知识图谱电商 Agent
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href="#"
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:bg-indigo-500"
-              >
-                查看执行日志
-                <FiArrowUpRight className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
-              >
-                接入 LangChain
-              </a>
-            </div>
-          </div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">运营指挥台 · 三栏布局</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            左：Agent 执行进度与统计 · 中：与用户实时聊天 · 右：审核待办与运营编排。接口接入后可替换为实时数据。
-          </p>
+    <div className="relative isolate h-[calc(100vh-80px)] overflow-hidden px-3 pb-0">
+      <section className="mx-auto mt-1 flex h-full max-w-[108rem] flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-2 shadow-lg backdrop-blur md:p-3 dark:border-white/10 dark:bg-slate-900/80">
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-1" />
         </div>
 
         <div className="mt-6 grid flex-1 min-h-0 gap-4 md:grid-cols-[1fr_1fr_2.2fr]">
@@ -734,7 +719,8 @@ export default function AgentConsole() {
                 </div>
               </div>
               <div className="flex h-full min-h-0 flex-col">
-                <div className="flex-1 space-y-3 overflow-y-auto rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
+                <div className="flex flex-1 min-h-0 flex-col rounded-2xl border border-slate-200/60 bg-white/70 p-3 dark:border-slate-800/60 dark:bg-slate-900/60">
+                  <div className="flex-1 space-y-3 overflow-y-auto">
                   {messages.map((msg, idx) => (
                     <div key={`${msg.role}-${idx}`} className={`flex ${msg.role === 'agent' ? 'justify-start' : 'justify-end'}`}>
                       <div
@@ -760,25 +746,27 @@ export default function AgentConsole() {
                       </div>
                     </div>
                   )}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    className="w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
-                    placeholder="输入你的问题"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSend();
-                    }}
-                  />
-                  <button
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                    onClick={handleSend}
-                    disabled={!canSend}
-                  >
-                    发送
-                    <FiSend className="h-4 w-4" />
-                  </button>
+                  <div ref={messagesEndRef} />
+                  </div>
+                  <div className="mt-3 flex gap-2 border-t border-slate-200/60 pt-3 dark:border-slate-800/60">
+                    <input
+                      className="flex-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100"
+                      placeholder="输入你的问题"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSend();
+                      }}
+                    />
+                    <button
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                      onClick={handleSend}
+                      disabled={!canSend}
+                    >
+                      发送
+                      <FiSend className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </Card>
