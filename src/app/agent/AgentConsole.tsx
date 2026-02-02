@@ -5,9 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiActivity,
   FiAlertTriangle,
-  FiArrowUpRight,
   FiClock,
-  FiCpu,
   FiDatabase,
   FiMessageCircle,
   FiPackage,
@@ -22,6 +20,15 @@ type ChatMessage = {
   role: 'user' | 'agent';
   text: string;
   citations?: string[];
+  traces?: TraceItem[];
+};
+
+type TraceItem = {
+  step: string;
+  stage?: string;
+  level?: 'info' | 'warning' | 'error' | string;
+  time?: string;
+  payload?: Record<string, unknown> | null;
 };
 
 type AgentSession = {
@@ -36,6 +43,11 @@ type AgentMessage = {
   role: string;
   content?: string | null;
   status?: string | null;
+  tool_name?: string | null;
+  tool_payload?: {
+    trace?: TraceItem[];
+    [key: string]: unknown;
+  } | null;
   created_at?: string | null;
 };
 
@@ -71,12 +83,24 @@ type StreamDone = {
   type: 'done';
   messageId: string;
   citations?: string[];
+  trace?: TraceItem[];
 };
 
 type StreamMeta = {
   type: 'meta';
   label: string;
   value: string;
+};
+
+type StreamTrace = {
+  type: 'trace';
+  step: string;
+  stage?: string;
+  level?: 'info' | 'warning' | 'error' | string;
+  time?: string;
+  payload?: Record<string, unknown> | null;
+  messageId?: string;
+  sessionId?: string;
 };
 
 const executionTimeline = [
@@ -102,7 +126,8 @@ const toneColor: Record<string, string> = {
   emerald: 'text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30',
   indigo: 'text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30',
   amber: 'text-amber-600 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30',
-  slate: 'text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50'
+  slate: 'text-slate-600 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/50',
+  rose: 'text-rose-600 dark:text-rose-200 bg-rose-50 dark:bg-rose-900/30'
 };
 
 const AGENT_STORAGE_KEY = 'agent_console_state_v1';
@@ -120,6 +145,7 @@ export default function AgentConsole() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState('');
+  const [streamTraces, setStreamTraces] = useState<TraceItem[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -135,6 +161,7 @@ export default function AgentConsole() {
   const [reviewUpdatingId, setReviewUpdatingId] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
+  const streamTracesRef = useRef<TraceItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -143,7 +170,7 @@ export default function AgentConsole() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamBuffer, isStreaming]);
+  }, [messages, streamBuffer, streamTraces, isStreaming]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
 
@@ -170,7 +197,9 @@ export default function AgentConsole() {
       if (typeof parsed.activeSessionTitle === 'string') {
         setActiveSessionTitle(parsed.activeSessionTitle);
       }
-    } catch {}
+    } catch {
+      // ignore sessionStorage parse error
+    }
   }, []);
 
   useEffect(() => {
@@ -179,7 +208,9 @@ export default function AgentConsole() {
         AGENT_STORAGE_KEY,
         JSON.stringify({ messages, sessionId, activeSessionTitle })
       );
-    } catch {}
+    } catch {
+      // ignore sessionStorage write error
+    }
   }, [messages, sessionId, activeSessionTitle]);
 
   useEffect(() => {
@@ -198,13 +229,33 @@ export default function AgentConsole() {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
   };
 
+  const traceTimeline = useMemo(() => {
+    const latestAgentTrace = [...messages]
+      .reverse()
+      .find((msg) => msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0)?.traces || [];
+    const current = streamTraces.length > 0 ? streamTraces : latestAgentTrace;
+    if (!current.length) return executionTimeline;
+    return current
+      .slice(-8)
+      .map((item) => ({
+        label: item.stage || 'process',
+        status: item.level === 'error' ? '错误' : item.level === 'warning' ? '注意' : '进行中',
+        detail: item.step,
+        time: item.time ? formatTime(item.time) : '刚刚',
+        tone: item.level === 'error' ? 'rose' : item.level === 'warning' ? 'amber' : 'indigo'
+      }))
+      .reverse();
+  }, [messages, streamTraces]);
+
   const stopStream = () => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
     streamBufferRef.current = '';
+    streamTracesRef.current = [];
     setStreamBuffer('');
+    setStreamTraces([]);
     setIsStreaming(false);
   };
 
@@ -213,18 +264,34 @@ export default function AgentConsole() {
     setStreamBuffer(streamBufferRef.current);
   };
 
-  const finalizeAgentMessage = (citations?: string[]) => {
+  const appendTrace = (trace: TraceItem) => {
+    streamTracesRef.current = [...streamTracesRef.current, trace];
+    setStreamTraces(streamTracesRef.current);
+  };
+
+  const finalizeAgentMessage = (citations?: string[], traces?: TraceItem[]) => {
     const finalText = streamBufferRef.current;
-    setMessages((prev) => [...prev, { role: 'agent', text: finalText || '（空响应）', citations }]);
+    const finalTraces =
+      Array.isArray(traces) && traces.length > 0
+        ? traces
+        : streamTracesRef.current;
+    setMessages((prev) => [
+      ...prev,
+      { role: 'agent', text: finalText || '（空响应）', citations, traces: finalTraces }
+    ]);
     streamBufferRef.current = '';
+    streamTracesRef.current = [];
     setStreamBuffer('');
+    setStreamTraces([]);
     setIsStreaming(false);
   };
 
   const startSSEStream = (query: string) => {
     stopStream();
     streamBufferRef.current = '';
+    streamTracesRef.current = [];
     setStreamBuffer('');
+    setStreamTraces([]);
     const params = new URLSearchParams({ message: query });
     if (sessionId) params.set('session_id', sessionId);
     const url = `${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`;
@@ -239,7 +306,7 @@ export default function AgentConsole() {
 
     es.addEventListener('done', (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as StreamDone;
-      finalizeAgentMessage(payload.citations);
+      finalizeAgentMessage(payload.citations, payload.trace);
       es.close();
       eventSourceRef.current = null;
     });
@@ -251,12 +318,37 @@ export default function AgentConsole() {
       }
     });
 
+    es.addEventListener('trace', (event) => {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as StreamTrace;
+      if (!payload.step) return;
+      appendTrace({
+        step: payload.step,
+        stage: payload.stage,
+        level: payload.level,
+        time: payload.time,
+        payload: payload.payload || null
+      });
+    });
+
     es.onerror = () => {
       console.warn('SSE 连接失败');
       es.close();
       eventSourceRef.current = null;
-      stopStream();
-      setMessages((prev) => [...prev, { role: 'agent', text: '连接失败，请稍后重试。' }]);
+      finalizeAgentMessage(undefined, [
+        ...streamTracesRef.current,
+        { step: '流式连接失败', stage: 'error', level: 'error' }
+      ]);
+      setMessages((prev) => {
+        if (!prev.length) {
+          return [{ role: 'agent', text: '连接失败，请稍后重试。' }];
+        }
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last.role === 'agent' && (last.text || '') === '（空响应）') {
+          next[next.length - 1] = { ...last, text: '连接失败，请稍后重试。' };
+        }
+        return next;
+      });
     };
   };
 
@@ -360,7 +452,9 @@ export default function AgentConsole() {
     closeHistory();
     try {
       sessionStorage.removeItem(AGENT_STORAGE_KEY);
-    } catch {}
+    } catch {
+      // ignore sessionStorage clear error
+    }
   };
 
   const mapHistoryMessages = (items: AgentMessage[]) => {
@@ -369,7 +463,11 @@ export default function AgentConsole() {
       const role = item.role === 'assistant' ? 'agent' : item.role === 'user' ? 'user' : null;
       if (!role) return;
       const text = (item.content || '').trim();
-      mapped.push({ role, text: text || '（空响应）' });
+      const traces =
+        role === 'agent' && item.tool_name === 'agent_trace' && Array.isArray(item.tool_payload?.trace)
+          ? item.tool_payload?.trace.filter((trace) => trace && typeof trace.step === 'string')
+          : undefined;
+      mapped.push({ role, text: text || '（空响应）', traces });
     });
     return mapped;
   };
@@ -419,7 +517,9 @@ export default function AgentConsole() {
           if (payload?.detail) {
             message = payload.detail;
           }
-        } catch {}
+        } catch {
+          // ignore malformed error payload
+        }
         throw new Error(message);
       }
       setSessions((prev) => prev.filter((item) => item.session_id !== session.session_id));
@@ -456,9 +556,9 @@ export default function AgentConsole() {
                 </span>
               </div>
               <div className="space-y-3">
-                {executionTimeline.map((item) => (
+                {traceTimeline.map((item, idx) => (
                   <div
-                    key={item.label}
+                    key={`${item.label}-${idx}`}
                     className="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70"
                   >
                     <div className="flex items-center justify-between">
@@ -731,6 +831,24 @@ export default function AgentConsole() {
                         }`}
                       >
                         <p>{msg.text}</p>
+                        {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
+                          <details className="mt-2 rounded-lg border border-white/20 bg-black/10 p-2" open={idx === messages.length - 1}>
+                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-indigo-100">
+                              Thought Process ({msg.traces.length})
+                            </summary>
+                            <div className="mt-2 space-y-1 text-[11px] text-indigo-100">
+                              {msg.traces.map((trace, traceIdx) => (
+                                <div key={`${idx}-trace-${traceIdx}`} className="rounded border border-white/10 bg-black/10 px-2 py-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold">{trace.stage || 'process'}</span>
+                                    {trace.time && <span className="opacity-75">{formatTime(trace.time)}</span>}
+                                  </div>
+                                  <div className="mt-1 whitespace-pre-wrap break-words">{trace.step}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                         {msg.citations && msg.citations.length > 0 && (
                           <p className="mt-1 text-[11px] text-indigo-100 dark:text-indigo-200">
                             引用: {msg.citations.join(', ')}
@@ -742,6 +860,24 @@ export default function AgentConsole() {
                   {isStreaming && (
                     <div className="flex justify-start">
                       <div className="max-w-[80%] rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white shadow-sm">
+                        {streamTraces.length > 0 && (
+                          <details className="mb-2 rounded-lg border border-white/20 bg-black/10 p-2" open>
+                            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-indigo-100">
+                              Thought Process ({streamTraces.length})
+                            </summary>
+                            <div className="mt-2 space-y-1 text-[11px] text-indigo-100">
+                              {streamTraces.slice(-6).map((trace, traceIdx) => (
+                                <div key={`stream-trace-${traceIdx}`} className="rounded border border-white/10 bg-black/10 px-2 py-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold">{trace.stage || 'process'}</span>
+                                    {trace.time && <span className="opacity-75">{formatTime(trace.time)}</span>}
+                                  </div>
+                                  <div className="mt-1 whitespace-pre-wrap break-words">{trace.step}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                         {streamBuffer ? (
                           streamBuffer
                         ) : (
