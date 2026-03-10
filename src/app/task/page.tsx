@@ -28,8 +28,8 @@ type ClearQueueResponse = {
   removed_keys: number;
 };
 
-const DEFAULT_QUEUE_KEY = 'crawl4ai:queue';
-const ACTIVE_SET_KEY = 'crawl4ai:active';
+const DEFAULT_QUEUE_KEY = 'crawl:queue';
+const ACTIVE_SET_KEY = 'crawl:active';
 const PREPROCESS_QUEUE_KEY = 'kg:preprocess:queue';
 const PREPROCESS_ACTIVE_KEY = 'kg:preprocess:active';
 const GRAPH_QUEUE_KEY = 'kg:graph:queue';
