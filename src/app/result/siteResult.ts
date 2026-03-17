@@ -31,6 +31,14 @@ export type ResultDetailResponse = {
     item?: SiteResultItem | null;
 };
 
+export type ProcessedMarkdownResponse = {
+    site_id: number;
+    site_url: string;
+    root_url: string;
+    processed_markdown: string;
+    generated: boolean;
+};
+
 const GRAPH_BUILDABLE_STATUSES = new Set(['CRAWLED', 'GRAPH_FAILED', 'GRAPH_CANCELLED']);
 
 export const getSiteDisplayName = (item?: Pick<SiteResultItem, 'name' | 'site_name'> | null) => {

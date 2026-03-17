@@ -12,6 +12,7 @@ import {
     formatDuration,
     formatStatus,
     getSiteDisplayName,
+    type ProcessedMarkdownResponse,
     type ResultDetailResponse,
     type ResultListResponse,
     type SiteResultItem,
@@ -49,6 +50,11 @@ export default function ResultListClient() {
     const [detailData, setDetailData] = useState<SiteResultItem | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState('');
+    const [processedMdId, setProcessedMdId] = useState<number | null>(null);
+    const [processedMdData, setProcessedMdData] = useState<ProcessedMarkdownResponse | null>(null);
+    const [processedMdLoading, setProcessedMdLoading] = useState(false);
+    const [processedMdError, setProcessedMdError] = useState('');
+    const [processedMdPendingId, setProcessedMdPendingId] = useState<number | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [crawlSubmitting, setCrawlSubmitting] = useState(false);
     const [crawlFeedback, setCrawlFeedback] = useState('');
@@ -92,6 +98,28 @@ export default function ResultListClient() {
             setDetailData(null);
         } finally {
             setDetailLoading(false);
+        }
+    };
+
+    const fetchProcessedMarkdown = async (id: number) => {
+        setProcessedMdId(id);
+        setProcessedMdData(null);
+        setProcessedMdLoading(true);
+        setProcessedMdError('');
+        setProcessedMdPendingId(id);
+        try {
+            const res = await fetch(`${API_BASE}/api/results/${id}/processed_markdown`, { cache: 'no-store' });
+            const json = (await res.json()) as ProcessedMarkdownResponse & { error?: string };
+            if (!res.ok) {
+                throw new Error(json?.error || `请求失败：${res.status}`);
+            }
+            setProcessedMdData(json);
+        } catch (e) {
+            setProcessedMdError(e instanceof Error ? e.message : '未知错误');
+            setProcessedMdData(null);
+        } finally {
+            setProcessedMdLoading(false);
+            setProcessedMdPendingId(null);
         }
     };
 
@@ -272,6 +300,7 @@ export default function ResultListClient() {
                                     <th className="px-4 py-3">page_count</th>
                                     <th className="px-4 py-3">爬取用时(分钟)</th>
                                     <th className="px-4 py-3">构建图谱用时(分钟)</th>
+                                    <th className="px-4 py-3">PROCESSED_MD</th>
                                     <th className="px-4 py-3">action</th>
                                 </tr>
                             </thead>
@@ -299,6 +328,15 @@ export default function ResultListClient() {
                                         <td className="px-4 py-3">{formatDuration(item.crawl_duration_ms)}</td>
                                         <td className="px-4 py-3">{formatDuration(item.graph_duration_ms)}</td>
                                         <td className="px-4 py-3">
+                                            <button
+                                                onClick={() => fetchProcessedMarkdown(item.id)}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-emerald-700 dark:hover:text-emerald-200"
+                                            >
+                                                <FiInfo className={`h-3 w-3 ${processedMdPendingId === item.id ? 'animate-spin' : ''}`} />
+                                                详情
+                                            </button>
+                                        </td>
+                                        <td className="px-4 py-3">
                                             <div className="flex flex-wrap gap-2">
                                                 <button
                                                     onClick={() => fetchDetail(item.id)}
@@ -313,7 +351,7 @@ export default function ResultListClient() {
                                 ))}
                                 {!loading && (data?.items || []).length === 0 && (
                                     <tr>
-                                        <td className="px-4 py-10 text-center text-slate-500 dark:text-slate-400" colSpan={9}>
+                                        <td className="px-4 py-10 text-center text-slate-500 dark:text-slate-400" colSpan={10}>
                                             暂无数据
                                         </td>
                                     </tr>
@@ -380,6 +418,52 @@ export default function ResultListClient() {
                                     <div className="text-sm text-slate-500 dark:text-slate-400">加载中...</div>
                                 ) : (
                                     <SiteDetailContent item={detailData} onOpenGraph={handleOpenGraph} />
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {processedMdId && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+                        <div className="max-h-[90vh] w-[min(94vw,1120px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+                            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+                                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                                    <FiInfo className="h-5 w-5 text-emerald-500" />
+                                    <h3 className="text-lg font-semibold">PROCESSED_MD（ID: {processedMdId}）</h3>
+                                    {processedMdLoading && <span className="text-xs text-slate-500 dark:text-slate-400">加载中…</span>}
+                                    {processedMdError && <span className="text-xs text-red-500">{processedMdError}</span>}
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setProcessedMdId(null);
+                                        setProcessedMdData(null);
+                                        setProcessedMdError('');
+                                    }}
+                                    className="rounded-lg px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                    关闭
+                                </button>
+                            </div>
+                            <div className="max-h-[calc(90vh-4rem)] space-y-4 overflow-auto px-5 py-4">
+                                {processedMdData && (
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+                                            <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">site_url</div>
+                                            <div className="mt-2 break-all">{processedMdData.site_url || '—'}</div>
+                                        </div>
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
+                                            <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">root_url</div>
+                                            <div className="mt-2 break-all">{processedMdData.root_url || '—'}</div>
+                                        </div>
+                                    </div>
+                                )}
+                                {processedMdLoading && !processedMdData ? (
+                                    <div className="text-sm text-slate-500 dark:text-slate-400">加载中...</div>
+                                ) : (
+                                    <pre className="min-h-40 overflow-auto whitespace-pre-wrap break-words rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100">
+                                        {processedMdData?.processed_markdown?.trim() || '暂无内容'}
+                                    </pre>
                                 )}
                             </div>
                         </div>
