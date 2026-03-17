@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiActivity,
@@ -14,6 +14,7 @@ import {
   FiTrash2,
   FiTrendingUp
 } from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
 import { AGENT_API_BASE } from '@/config/api';
 
 type ChatMessage = {
@@ -132,11 +133,78 @@ const toneColor: Record<string, string> = {
 
 const AGENT_STORAGE_KEY = 'agent_console_state_v1';
 
+type MarkdownTag = 'a' | 'blockquote' | 'code' | 'pre';
+
+type MarkdownElementProps<T extends MarkdownTag> = ComponentPropsWithoutRef<T> & {
+  children?: ReactNode;
+  inline?: boolean;
+  node?: unknown;
+};
+
 const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
   <div
     className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
   >
     {children}
+  </div>
+);
+
+const AgentMarkdown = ({ content }: { content: string }) => (
+  <div className="prose prose-sm max-w-none break-words text-inherit prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-li:text-inherit prose-blockquote:text-slate-600 prose-hr:border-slate-200 dark:prose-invert dark:prose-blockquote:text-slate-300 dark:prose-hr:border-slate-700">
+    <ReactMarkdown
+      components={{
+        a: ({ href, children, ...props }: MarkdownElementProps<'a'>) => (
+          <a
+            {...props}
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-medium text-sky-600 underline decoration-sky-300 underline-offset-2 transition hover:text-sky-500 dark:text-sky-300 dark:decoration-sky-500/40 dark:hover:text-sky-200"
+          >
+            {children}
+          </a>
+        ),
+        pre: ({ children, ...props }: MarkdownElementProps<'pre'>) => (
+          <pre
+            {...props}
+            className="my-3 overflow-x-auto rounded-xl bg-slate-950 px-4 py-3 text-[13px] leading-6 text-slate-100"
+          >
+            {children}
+          </pre>
+        ),
+        code: ({ children, className, inline, ...props }: MarkdownElementProps<'code'>) => {
+          const codeText = String(children ?? '').replace(/\n$/, '');
+          const isBlock = Boolean(inline === false || className || codeText.includes('\n'));
+
+          if (isBlock) {
+            return (
+              <code {...props} className={`block font-mono text-[13px] leading-6 text-slate-100 ${className ?? ''}`.trim()}>
+                {codeText}
+              </code>
+            );
+          }
+
+          return (
+            <code
+              {...props}
+              className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-rose-600 before:content-none after:content-none dark:bg-slate-700/80 dark:text-rose-200"
+            >
+              {children}
+            </code>
+          );
+        },
+        blockquote: ({ children, ...props }: MarkdownElementProps<'blockquote'>) => (
+          <blockquote
+            {...props}
+            className="my-3 border-l-4 border-slate-300 bg-slate-50/70 py-1 pl-4 italic text-slate-600 dark:border-slate-600 dark:bg-slate-700/20 dark:text-slate-300"
+          >
+            {children}
+          </blockquote>
+        )
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   </div>
 );
 
@@ -851,7 +919,11 @@ export default function AgentConsole() {
                             : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
                           }`}
                       >
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                        {msg.role === 'agent' ? (
+                          <AgentMarkdown content={msg.text} />
+                        ) : (
+                          <div className="whitespace-pre-wrap">{msg.text}</div>
+                        )}
                         {msg.citations && msg.citations.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
                             {msg.citations.map((cite, i) => (
@@ -889,7 +961,7 @@ export default function AgentConsole() {
                       {/* Streaming Message Bubble */}
                       <div className="relative max-w-[85%] rounded-2xl rounded-tl-none border border-slate-100 bg-white px-5 py-3 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100">
                         {streamBuffer ? (
-                          <span className="whitespace-pre-wrap">{streamBuffer}</span>
+                          <AgentMarkdown content={streamBuffer} />
                         ) : (
                           <div className="flex items-center gap-1 py-1">
                             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
