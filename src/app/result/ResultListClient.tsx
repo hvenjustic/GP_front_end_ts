@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { FiArrowLeft, FiArrowRight, FiInfo, FiPlay, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiArrowRight, FiDownload, FiInfo, FiPlay, FiRefreshCw } from 'react-icons/fi';
 import { API_BASE } from '@/config/api';
 import SiteDetailContent from './SiteDetailContent';
 import {
@@ -50,9 +50,6 @@ export default function ResultListClient() {
     const [detailData, setDetailData] = useState<SiteResultItem | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState('');
-    const [processedMdId, setProcessedMdId] = useState<number | null>(null);
-    const [processedMdData, setProcessedMdData] = useState<ProcessedMarkdownResponse | null>(null);
-    const [processedMdLoading, setProcessedMdLoading] = useState(false);
     const [processedMdError, setProcessedMdError] = useState('');
     const [processedMdPendingId, setProcessedMdPendingId] = useState<number | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -101,10 +98,7 @@ export default function ResultListClient() {
         }
     };
 
-    const fetchProcessedMarkdown = async (id: number) => {
-        setProcessedMdId(id);
-        setProcessedMdData(null);
-        setProcessedMdLoading(true);
+    const downloadProcessedMarkdown = async (id: number) => {
         setProcessedMdError('');
         setProcessedMdPendingId(id);
         try {
@@ -113,12 +107,20 @@ export default function ResultListClient() {
             if (!res.ok) {
                 throw new Error(json?.error || `请求失败：${res.status}`);
             }
-            setProcessedMdData(json);
+
+            const fileName = `site_${id}_processed.md`;
+            const blob = new Blob([json.processed_markdown || ''], { type: 'text/markdown;charset=utf-8' });
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(objectUrl);
         } catch (e) {
             setProcessedMdError(e instanceof Error ? e.message : '未知错误');
-            setProcessedMdData(null);
         } finally {
-            setProcessedMdLoading(false);
             setProcessedMdPendingId(null);
         }
     };
@@ -280,6 +282,11 @@ export default function ResultListClient() {
                             {graphFeedback}
                         </div>
                     )}
+                    {processedMdError && (
+                        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+                            PROCESSED_MD 下载失败：{processedMdError}
+                        </div>
+                    )}
                     <div className="overflow-auto">
                         <table className="min-w-full text-left text-sm">
                             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
@@ -329,11 +336,11 @@ export default function ResultListClient() {
                                         <td className="px-4 py-3">{formatDuration(item.graph_duration_ms)}</td>
                                         <td className="px-4 py-3">
                                             <button
-                                                onClick={() => fetchProcessedMarkdown(item.id)}
+                                                onClick={() => downloadProcessedMarkdown(item.id)}
                                                 className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-emerald-700 dark:hover:text-emerald-200"
                                             >
-                                                <FiInfo className={`h-3 w-3 ${processedMdPendingId === item.id ? 'animate-spin' : ''}`} />
-                                                详情
+                                                <FiDownload className={`h-3 w-3 ${processedMdPendingId === item.id ? 'animate-spin' : ''}`} />
+                                                下载
                                             </button>
                                         </td>
                                         <td className="px-4 py-3">
@@ -418,52 +425,6 @@ export default function ResultListClient() {
                                     <div className="text-sm text-slate-500 dark:text-slate-400">加载中...</div>
                                 ) : (
                                     <SiteDetailContent item={detailData} onOpenGraph={handleOpenGraph} />
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {processedMdId && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-                        <div className="max-h-[90vh] w-[min(94vw,1120px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-                            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800">
-                                <div className="flex items-center gap-2 text-slate-900 dark:text-white">
-                                    <FiInfo className="h-5 w-5 text-emerald-500" />
-                                    <h3 className="text-lg font-semibold">PROCESSED_MD（ID: {processedMdId}）</h3>
-                                    {processedMdLoading && <span className="text-xs text-slate-500 dark:text-slate-400">加载中…</span>}
-                                    {processedMdError && <span className="text-xs text-red-500">{processedMdError}</span>}
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setProcessedMdId(null);
-                                        setProcessedMdData(null);
-                                        setProcessedMdError('');
-                                    }}
-                                    className="rounded-lg px-2 py-1 text-sm text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                                >
-                                    关闭
-                                </button>
-                            </div>
-                            <div className="max-h-[calc(90vh-4rem)] space-y-4 overflow-auto px-5 py-4">
-                                {processedMdData && (
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                                            <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">site_url</div>
-                                            <div className="mt-2 break-all">{processedMdData.site_url || '—'}</div>
-                                        </div>
-                                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-300">
-                                            <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">root_url</div>
-                                            <div className="mt-2 break-all">{processedMdData.root_url || '—'}</div>
-                                        </div>
-                                    </div>
-                                )}
-                                {processedMdLoading && !processedMdData ? (
-                                    <div className="text-sm text-slate-500 dark:text-slate-400">加载中...</div>
-                                ) : (
-                                    <pre className="min-h-40 overflow-auto whitespace-pre-wrap break-words rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100">
-                                        {processedMdData?.processed_markdown?.trim() || '暂无内容'}
-                                    </pre>
                                 )}
                             </div>
                         </div>
