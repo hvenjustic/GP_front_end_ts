@@ -16,6 +16,7 @@ export type SiteResultItem = {
     crawl_duration_ms?: number | null;
     graph_duration_ms?: number | null;
     graph_json?: string | null;
+    has_processed_markdown?: boolean;
     created_at?: string | null;
     updated_at?: string | null;
 };
@@ -51,7 +52,11 @@ export const getSiteDisplayName = (item?: Pick<SiteResultItem, 'name' | 'site_na
 
 export const normalizeStatus = (value?: string | null) => (value || '').trim().toUpperCase();
 
-export const canBuildGraph = (item: SiteResultItem) => GRAPH_BUILDABLE_STATUSES.has(normalizeStatus(item.status));
+export const canBuildGraph = (item: SiteResultItem) => {
+    const status = normalizeStatus(item.status);
+    if (status === 'CRAWLED') return true;
+    return Boolean(item.has_processed_markdown) && GRAPH_BUILDABLE_STATUSES.has(status);
+};
 
 export const formatStatus = (value?: string | null) => value?.trim() || '—';
 

@@ -242,7 +242,7 @@ export default function ResultListClient() {
                             disabled={graphSubmitting || selectedGraphIds.length === 0}
                             title={
                                 selectedIds.length > 0 && selectedGraphIds.length === 0
-                                    ? '请先选择状态为 CRAWLED、GRAPH_FAILED 或 GRAPH_CANCELLED 的记录'
+                                    ? '请先选择可构图记录：CRAWLED 状态可直接构图；GRAPH_FAILED 或 GRAPH_CANCELLED 需已有 PROCESSED_MD'
                                     : undefined
                             }
                             className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200 dark:hover:border-indigo-700"
