@@ -5,7 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiActivity,
   FiAlertTriangle,
+  FiCheck,
   FiClock,
+  FiCopy,
   FiDatabase,
   FiMessageCircle,
   FiPackage,
@@ -214,6 +216,7 @@ export default function AgentConsole() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState('');
   const [streamTraces, setStreamTraces] = useState<TraceItem[]>([]);
+  const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -230,6 +233,7 @@ export default function AgentConsole() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
   const streamTracesRef = useRef<TraceItem[]>([]);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -284,6 +288,9 @@ export default function AgentConsole() {
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
+      if (copyFeedbackTimerRef.current) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
+      }
     };
   }, []);
 
@@ -314,6 +321,52 @@ export default function AgentConsole() {
       }))
       .reverse();
   }, [messages, streamTraces]);
+
+  const flashCopiedState = (messageKey: string) => {
+    setCopiedMessageKey(messageKey);
+    if (copyFeedbackTimerRef.current) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      setCopiedMessageKey(null);
+      copyFeedbackTimerRef.current = null;
+    }, 1600);
+  };
+
+  const copyMessageWithExecCommand = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    try {
+      textarea.select();
+      const copied = document.execCommand('copy');
+      if (!copied) {
+        throw new Error('execCommand returned false');
+      }
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
+
+  const copyMessageText = async (text: string, messageKey: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          copyMessageWithExecCommand(text);
+        }
+      } else {
+        copyMessageWithExecCommand(text);
+      }
+      flashCopiedState(messageKey);
+    } catch (error) {
+      console.warn('复制消息失败', error);
+    }
+  };
 
   const stopStream = () => {
     if (eventSourceRef.current) {
@@ -889,53 +942,73 @@ export default function AgentConsole() {
               {/* Chat Messages Area */}
               <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
                 <div className="mx-auto max-w-3xl space-y-6">
-                  {messages.map((msg, idx) => (
-                    <div key={`${msg.role}-${idx}`} className={`flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
-                      {/* Agent Thinking Box */}
-                      {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
-                        <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-sky-100 bg-sky-50/80 p-3 backdrop-blur-sm transition-all duration-500 dark:border-sky-900/30 dark:bg-sky-900/20">
-                          <div className="flex items-center gap-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
-                            <div className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-                            思考过程
-                          </div>
-                          <div className="mt-2 space-y-2">
-                            {msg.traces.map((trace, traceIdx) => (
-                              <div key={`${idx}-trace-${traceIdx}`} className="group relative border-l-2 border-sky-200 pl-3 transition-all hover:border-sky-400 dark:border-sky-800">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '分析中'}</span>
-                                  {trace.time && <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100">{formatTime(trace.time)}</span>}
-                                </div>
-                                <div className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{trace.step}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                  {messages.map((msg, idx) => {
+                    const messageKey = `${msg.role}-${idx}`;
+                    const isCopied = copiedMessageKey === messageKey;
 
-                      {/* Message Bubble */}
-                      <div
-                        className={`relative max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
-                            ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
-                            : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
-                          }`}
-                      >
-                        {msg.role === 'agent' ? (
-                          <AgentMarkdown content={msg.text} />
-                        ) : (
-                          <div className="whitespace-pre-wrap">{msg.text}</div>
-                        )}
-                        {msg.citations && msg.citations.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
-                            {msg.citations.map((cite, i) => (
-                              <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
-                                引用 {i + 1}
-                              </span>
-                            ))}
+                    return (
+                      <div key={messageKey} className={`flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
+                        {/* Agent Thinking Box */}
+                        {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
+                          <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-sky-100 bg-sky-50/80 p-3 backdrop-blur-sm transition-all duration-500 dark:border-sky-900/30 dark:bg-sky-900/20">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                              <div className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+                              思考过程
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {msg.traces.map((trace, traceIdx) => (
+                                <div key={`${idx}-trace-${traceIdx}`} className="group relative border-l-2 border-sky-200 pl-3 transition-all hover:border-sky-400 dark:border-sky-800">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '分析中'}</span>
+                                    {trace.time && <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100">{formatTime(trace.time)}</span>}
+                                  </div>
+                                  <div className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{trace.step}</div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
+
+                        {/* Message Bubble */}
+                        <div
+                          className={`relative max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
+                              ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                              : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
+                            }`}
+                        >
+                          <div className="mb-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void copyMessageText(msg.text, messageKey)}
+                              aria-label={isCopied ? '已复制消息' : '复制消息'}
+                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                                isCopied
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-200'
+                                  : 'border-slate-200 bg-white/80 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100'
+                              }`}
+                            >
+                              {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
+                              {isCopied ? '已复制' : '复制'}
+                            </button>
+                          </div>
+                          {msg.role === 'agent' ? (
+                            <AgentMarkdown content={msg.text} />
+                          ) : (
+                            <div className="whitespace-pre-wrap">{msg.text}</div>
+                          )}
+                          {msg.citations && msg.citations.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
+                              {msg.citations.map((cite, i) => (
+                                <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
+                                  引用 {i + 1}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Streaming State */}
                   {isStreaming && (
