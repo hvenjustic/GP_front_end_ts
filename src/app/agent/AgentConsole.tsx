@@ -947,7 +947,7 @@ export default function AgentConsole() {
                     const isCopied = copiedMessageKey === messageKey;
 
                     return (
-                      <div key={messageKey} className={`flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
+                      <div key={messageKey} className={`group flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
                         {/* Agent Thinking Box */}
                         {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
                           <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-sky-100 bg-sky-50/80 p-3 backdrop-blur-sm transition-all duration-500 dark:border-sky-900/30 dark:bg-sky-900/20">
@@ -970,41 +970,47 @@ export default function AgentConsole() {
                         )}
 
                         {/* Message Bubble */}
-                        <div
-                          className={`relative max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
-                              ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
-                              : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
+                        <div className="max-w-[85%]">
+                          <div
+                            className={`relative rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
+                                ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                                : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
+                              }`}
+                          >
+                            {msg.role === 'agent' ? (
+                              <AgentMarkdown content={msg.text} />
+                            ) : (
+                              <div className="whitespace-pre-wrap">{msg.text}</div>
+                            )}
+                            {msg.citations && msg.citations.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
+                                {msg.citations.map((cite, i) => (
+                                  <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
+                                    引用 {i + 1}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className={`mt-2 flex ${msg.role === 'agent' ? 'justify-start pl-1' : 'justify-end pr-1'} transition-opacity duration-200 ${
+                              isCopied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                             }`}
-                        >
-                          <div className="mb-2 flex justify-end">
+                          >
                             <button
                               type="button"
                               onClick={() => void copyMessageText(msg.text, messageKey)}
                               aria-label={isCopied ? '已复制消息' : '复制消息'}
-                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
                                 isCopied
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-200'
-                                  : 'border-slate-200 bg-white/80 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100'
+                                  ? 'text-emerald-700 dark:text-emerald-200'
+                                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
                               }`}
                             >
                               {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
                               {isCopied ? '已复制' : '复制'}
                             </button>
                           </div>
-                          {msg.role === 'agent' ? (
-                            <AgentMarkdown content={msg.text} />
-                          ) : (
-                            <div className="whitespace-pre-wrap">{msg.text}</div>
-                          )}
-                          {msg.citations && msg.citations.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
-                              {msg.citations.map((cite, i) => (
-                                <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
-                                  引用 {i + 1}
-                                </span>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
