@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiArrowUpRight,
   FiChevronDown,
@@ -8,20 +8,17 @@ import {
   FiDatabase,
   FiGitBranch,
   FiGlobe,
-  FiLogIn,
   FiLogOut,
   FiRefreshCw,
   FiSearch,
   FiShoppingCart,
   FiTag,
   FiTrash2,
-  FiUser,
-  FiUserPlus
+  FiUser
 } from 'react-icons/fi';
 import { API_BASE } from '@/config/api';
+import { clearStoredToken, getStoredToken, openAuthDialog, subscribeAuthToken } from '@/components/auth/authStorage';
 import ProductGraph from './ProductGraph';
-
-const AUTH_TOKEN_KEY = 'kg_auth_token';
 
 type ProductItem = {
   id: number;
@@ -48,13 +45,6 @@ type ShopUser = {
   role: string;
   status: string;
   points_balance: number;
-};
-
-type AuthResponse = {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  user: ShopUser;
 };
 
 type CartItem = {
@@ -93,36 +83,12 @@ type OrderListResponse = {
   page_size: number;
 };
 
-type AuthMode = 'login' | 'register';
-
 const formatPoints = (value?: number | null) => `${Number(value || 0).toLocaleString()} 积分`;
 
 const formatTime = (value?: string | null) => {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-};
-
-const getStoredToken = () => {
-  if (typeof window === 'undefined') return '';
-  try {
-    return window.localStorage.getItem(AUTH_TOKEN_KEY) || '';
-  } catch {
-    return '';
-  }
-};
-
-const setStoredToken = (token: string) => {
-  if (typeof window === 'undefined') return;
-  try {
-    if (token) {
-      window.localStorage.setItem(AUTH_TOKEN_KEY, token);
-    } else {
-      window.localStorage.removeItem(AUTH_TOKEN_KEY);
-    }
-  } catch {
-    // ignore storage errors
-  }
 };
 
 const buildAuthHeaders = (token: string) => ({
@@ -136,16 +102,8 @@ export default function ProductsClient() {
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [token, setToken] = useState('');
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerPassword, setRegisterPassword] = useState('');
-  const [registerNickname, setRegisterNickname] = useState('');
-  const [registerCompany, setRegisterCompany] = useState('');
   const [loading, setLoading] = useState(false);
   const [protectedLoading, setProtectedLoading] = useState(false);
-  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [addingProductId, setAddingProductId] = useState<number | null>(null);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
@@ -163,7 +121,7 @@ export default function ProductsClient() {
 
   const clearAuthState = () => {
     setToken('');
-    setStoredToken('');
+    clearStoredToken();
     setUser(null);
     setCart(null);
     setOrders([]);
@@ -230,12 +188,17 @@ export default function ProductsClient() {
 
   useEffect(() => {
     const initialToken = getStoredToken();
-    if (initialToken) {
-      setToken(initialToken);
-      void fetchPageData(initialToken);
-      return;
-    }
-    void fetchPageData();
+    setToken(initialToken);
+    void fetchPageData(initialToken || undefined);
+
+    const unsubscribe = subscribeAuthToken((nextToken) => {
+      setToken(nextToken);
+      void fetchPageData(nextToken || undefined);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const filteredProducts = useMemo(() => {
@@ -243,67 +206,6 @@ export default function ProductsClient() {
     if (!keyword) return products;
     return products.filter((item) => item.name.toLowerCase().includes(keyword) || item.url.toLowerCase().includes(keyword));
   }, [products, search]);
-
-  const handleAuthSuccess = async (payload: AuthResponse) => {
-    setToken(payload.access_token);
-    setStoredToken(payload.access_token);
-    setUser(payload.user);
-    await refreshProtectedData(payload.access_token);
-  };
-
-  const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setAuthSubmitting(true);
-    setFeedback('');
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: registerEmail,
-          password: registerPassword,
-          nickname: registerNickname,
-          company_name: registerCompany
-        })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || `请求失败：${res.status}`);
-      await handleAuthSuccess(json as AuthResponse);
-      setFeedback('注册成功，已自动登录');
-      setRegisterPassword('');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : '注册失败');
-    } finally {
-      setAuthSubmitting(false);
-    }
-  };
-
-  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setAuthSubmitting(true);
-    setFeedback('');
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword
-        })
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || `请求失败：${res.status}`);
-      await handleAuthSuccess(json as AuthResponse);
-      setFeedback('登录成功');
-      setLoginPassword('');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : '登录失败');
-    } finally {
-      setAuthSubmitting(false);
-    }
-  };
 
   const handleLogout = () => {
     clearAuthState();
@@ -313,8 +215,9 @@ export default function ProductsClient() {
 
   const handleAddToCart = async (productId: number) => {
     if (!token) {
-      setError('请先登录后再加入购物车');
+      setError('请先点击右上角登录后再加入购物车');
       setFeedback('');
+      openAuthDialog();
       return;
     }
     if (addingProductId) return;
@@ -340,7 +243,8 @@ export default function ProductsClient() {
 
   const handleRemoveCartItem = async (itemId: number) => {
     if (!token) {
-      setError('请先登录后再操作购物车');
+      setError('请先点击右上角登录后再操作购物车');
+      openAuthDialog();
       return;
     }
     if (removingItemId) return;
@@ -365,7 +269,8 @@ export default function ProductsClient() {
 
   const handleCheckout = async () => {
     if (!token) {
-      setError('请先登录后再下单');
+      setError('请先点击右上角登录后再下单');
+      openAuthDialog();
       return;
     }
     if (checkoutLoading || !cart?.items.length) return;
@@ -620,91 +525,24 @@ export default function ProductsClient() {
                 </div>
               </div>
             ) : (
-              <div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setAuthMode('login')}
-                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                      authMode === 'login'
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                        : 'border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200'
-                    }`}
-                  >
-                    登录
-                  </button>
-                  <button
-                    onClick={() => setAuthMode('register')}
-                    className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                      authMode === 'register'
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                        : 'border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200'
-                    }`}
-                  >
-                    注册
-                  </button>
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">登录后解锁结算能力</h2>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    注册和登录已经收口到页面右上角弹窗。登录后会在导航栏显示用户名。
+                  </p>
                 </div>
-
-                {authMode === 'login' ? (
-                  <form className="mt-4 space-y-3" onSubmit={handleLogin}>
-                    <input
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="邮箱"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <input
-                      type="password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="密码"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <button
-                      type="submit"
-                      disabled={authSubmitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                    >
-                      <FiLogIn className="h-4 w-4" />
-                      {authSubmitting ? '登录中' : '登录'}
-                    </button>
-                  </form>
-                ) : (
-                  <form className="mt-4 space-y-3" onSubmit={handleRegister}>
-                    <input
-                      value={registerEmail}
-                      onChange={(e) => setRegisterEmail(e.target.value)}
-                      placeholder="邮箱"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <input
-                      type="password"
-                      value={registerPassword}
-                      onChange={(e) => setRegisterPassword(e.target.value)}
-                      placeholder="密码"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <input
-                      value={registerNickname}
-                      onChange={(e) => setRegisterNickname(e.target.value)}
-                      placeholder="昵称"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <input
-                      value={registerCompany}
-                      onChange={(e) => setRegisterCompany(e.target.value)}
-                      placeholder="公司名称"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                    <button
-                      type="submit"
-                      disabled={authSubmitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                    >
-                      <FiUserPlus className="h-4 w-4" />
-                      {authSubmitting ? '注册中' : '注册并登录'}
-                    </button>
-                  </form>
-                )}
+                <button
+                  type="button"
+                  onClick={() => openAuthDialog()}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                >
+                  <FiUser className="h-4 w-4" />
+                  立即登录 / 注册
+                </button>
+                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-300">
+                  未登录时仍可浏览商品、价格、实体数量和关系数量；购物车、订单和积分结算需要 JWT 登录态。
+                </div>
               </div>
             )}
           </div>
