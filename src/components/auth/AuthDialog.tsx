@@ -24,6 +24,12 @@ type AuthResponse = {
   user: ShopUser;
 };
 
+type SendRegisterCodeResponse = {
+  email: string;
+  expire_in: number;
+  resend_after: number;
+};
+
 type AuthDialogProps = {
   open: boolean;
   onClose: () => void;
@@ -38,8 +44,12 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
   const [loginPassword, setLoginPassword] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
+  const [registerVerificationCode, setRegisterVerificationCode] = useState('');
   const [registerNickname, setRegisterNickname] = useState('');
   const [registerCompany, setRegisterCompany] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [sendCodeCooldown, setSendCodeCooldown] = useState(0);
+  const [registerNotice, setRegisterNotice] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +70,16 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
       setSubmitting(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (sendCodeCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setSendCodeCooldown((current) => Math.max(current - 1, 0));
+    }, 1000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [sendCodeCooldown]);
 
   if (!open) return null;
 
@@ -96,13 +116,44 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
 
   const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setRegisterNotice('');
     await submitAuth('/api/auth/register', {
       email: registerEmail,
+      verification_code: registerVerificationCode,
       password: registerPassword,
       nickname: registerNickname,
       company_name: registerCompany
     });
     setRegisterPassword('');
+  };
+
+  const handleSendRegisterCode = async () => {
+    if (!registerEmail.trim()) {
+      setError('请先输入注册邮箱');
+      setRegisterNotice('');
+      return;
+    }
+    if (sendingCode || sendCodeCooldown > 0) return;
+
+    setSendingCode(true);
+    setError('');
+    setRegisterNotice('');
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/register/code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registerEmail })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || `请求失败：${res.status}`);
+      const payload = json as SendRegisterCodeResponse;
+      setSendCodeCooldown(Math.max(Number(payload.resend_after || 0), 0));
+      setRegisterNotice(`${payload.email} 的验证码已发送，${Math.max(Math.ceil(payload.expire_in / 60), 1)} 分钟内有效`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '验证码发送失败');
+    } finally {
+      setSendingCode(false);
+    }
   };
 
   return (
@@ -167,6 +218,12 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
             </div>
           )}
 
+          {registerNotice && mode === 'register' && (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+              {registerNotice}
+            </div>
+          )}
+
           {mode === 'login' ? (
             <form className="mt-5 space-y-3" onSubmit={handleLogin}>
               <input
@@ -206,6 +263,22 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
                 placeholder="密码"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
+              <div className="grid grid-cols-[minmax(0,1fr)_8.5rem] gap-3">
+                <input
+                  value={registerVerificationCode}
+                  onChange={(event) => setRegisterVerificationCode(event.target.value)}
+                  placeholder="邮箱验证码"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSendRegisterCode()}
+                  disabled={sendingCode || sendCodeCooldown > 0}
+                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  {sendingCode ? '发送中' : sendCodeCooldown > 0 ? `${sendCodeCooldown}s` : '发送验证码'}
+                </button>
+              </div>
               <input
                 value={registerNickname}
                 onChange={(event) => setRegisterNickname(event.target.value)}
