@@ -86,21 +86,21 @@ export default function GraphViewClient() {
         const nodeElems =
             data.nodes?.map((n) => ({
                 data: {
+                    ...n,
                     id: n.id,
                     label: n.label || n.name || n.id,
                     type: n.type,
-                    ...n,
                 },
             })) ?? [];
         const edgeElems =
             data.edges?.map((e) => ({
                 data: {
+                    ...e,
                     id: e.id || `${e.source}-${e.type || 'REL'}-${e.target}`,
                     source: e.source,
                     target: e.target,
                     label: e.label || e.type,
                     type: e.type,
-                    ...e,
                 },
             })) ?? [];
         return [...nodeElems, ...edgeElems];

@@ -185,10 +185,10 @@ export default function ProductGraph({ id, onBack, isEmbedded = false }: Product
       .filter(n => visibleNodeIds.has(n.id))
       .map(n => ({
         data: {
+          ...n,
           id: n.id,
           label: n.label || n.name || n.id,
           type: n.type,
-          ...n,
         }
       }));
       
@@ -199,12 +199,12 @@ export default function ProductGraph({ id, onBack, isEmbedded = false }: Product
       })
       .map(e => ({
         data: {
+            ...e,
             id: e.id || `${e.source}-${e.type}-${e.target}`,
             source: e.source,
             target: e.target,
             label: e.label || e.type,
             type: e.type,
-            ...e,
         }
       }));
       
@@ -488,4 +488,3 @@ export default function ProductGraph({ id, onBack, isEmbedded = false }: Product
     </div>
   );
 }
-
