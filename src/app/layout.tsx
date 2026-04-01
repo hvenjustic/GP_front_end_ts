@@ -7,7 +7,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Context-starter',
+  title: 'Context',
   description: 'A reusable Context-inspired shell without auth.',
   icons: {
     icon: '/context-icon.svg'

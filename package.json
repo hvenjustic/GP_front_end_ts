@@ -1,5 +1,5 @@
 {
-  "name": "context-starter",
+  "name": "context",
   "version": "0.1.0",
   "private": true,
   "description": "A stripped-down starter based on the Context shell without auth.",

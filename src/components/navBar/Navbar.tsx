@@ -98,7 +98,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
               <Image src="/context-icon.svg" alt="Logo" width={40} height={30} className="h-9 w-auto" />
-              Context-starter
+              Context
             </Link>
             <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex dark:border-slate-800 dark:text-slate-300">
               App Router

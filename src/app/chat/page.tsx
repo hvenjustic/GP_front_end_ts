@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { FiArrowUpRight, FiMessageCircle, FiSend, FiShield, FiSlack, FiUsers } from 'react-icons/fi';
 
 export const metadata: Metadata = {
-  title: 'Chat | Context-starter'
+  title: 'Chat | Context'
 };
 
 const chatFeatures = [
