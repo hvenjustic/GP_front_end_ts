@@ -144,6 +144,229 @@ type MarkdownElementProps<T extends MarkdownTag> = ComponentPropsWithoutRef<T> &
   node?: unknown;
 };
 
+type MarkdownTableAlignment = 'left' | 'center' | 'right' | null;
+
+type MarkdownBlock =
+  | {
+      type: 'markdown';
+      content: string;
+    }
+  | {
+      type: 'table';
+      header: string[];
+      rows: string[][];
+      alignments: MarkdownTableAlignment[];
+    };
+
+const markdownClassName =
+  'prose prose-sm max-w-none break-words text-inherit prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-li:text-inherit prose-blockquote:text-slate-600 prose-hr:border-slate-200 dark:prose-invert dark:prose-blockquote:text-slate-300 dark:prose-hr:border-slate-700';
+
+const compactMarkdownClassName =
+  'prose prose-sm max-w-none break-words text-inherit prose-p:my-0 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-code:text-[0.85em] prose-headings:my-1 prose-blockquote:my-1 dark:prose-invert';
+
+const tableAlignmentClassName: Record<Exclude<MarkdownTableAlignment, null>, string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right'
+};
+
+const markdownComponents = {
+  a: ({ href, children, ...props }: MarkdownElementProps<'a'>) => (
+    <a
+      {...props}
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="font-medium text-sky-600 underline decoration-sky-300 underline-offset-2 transition hover:text-sky-500 dark:text-sky-300 dark:decoration-sky-500/40 dark:hover:text-sky-200"
+    >
+      {children}
+    </a>
+  ),
+  pre: ({ children, ...props }: MarkdownElementProps<'pre'>) => (
+    <pre
+      {...props}
+      className="my-3 overflow-x-auto rounded-xl bg-slate-950 px-4 py-3 text-[13px] leading-6 text-slate-100"
+    >
+      {children}
+    </pre>
+  ),
+  code: ({ children, className, inline, ...props }: MarkdownElementProps<'code'>) => {
+    const codeText = String(children ?? '').replace(/\n$/, '');
+    const isBlock = Boolean(inline === false || className || codeText.includes('\n'));
+
+    if (isBlock) {
+      return (
+        <code {...props} className={`block font-mono text-[13px] leading-6 text-slate-100 ${className ?? ''}`.trim()}>
+          {codeText}
+        </code>
+      );
+    }
+
+    return (
+      <code
+        {...props}
+        className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-rose-600 before:content-none after:content-none dark:bg-slate-700/80 dark:text-rose-200"
+      >
+        {children}
+      </code>
+    );
+  },
+  blockquote: ({ children, ...props }: MarkdownElementProps<'blockquote'>) => (
+    <blockquote
+      {...props}
+      className="my-3 border-l-4 border-slate-300 bg-slate-50/70 py-1 pl-4 italic text-slate-600 dark:border-slate-600 dark:bg-slate-700/20 dark:text-slate-300"
+    >
+      {children}
+    </blockquote>
+  )
+};
+
+const MarkdownContent = ({ content, className = markdownClassName }: { content: string; className?: string }) => (
+  <div className={className}>
+    <ReactMarkdown components={markdownComponents}>{content}</ReactMarkdown>
+  </div>
+);
+
+const splitMarkdownTableRow = (line: string) => {
+  let normalized = line.trim();
+  if (normalized.startsWith('|')) normalized = normalized.slice(1);
+  if (normalized.endsWith('|')) normalized = normalized.slice(0, -1);
+
+  const cells: string[] = [];
+  let current = '';
+  let escaped = false;
+  let inCodeSpan = false;
+
+  for (const char of normalized) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      current += char;
+      continue;
+    }
+
+    if (char === '`') {
+      inCodeSpan = !inCodeSpan;
+      current += char;
+      continue;
+    }
+
+    if (char === '|' && !inCodeSpan) {
+      cells.push(current.trim().replace(/\\\|/g, '|'));
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  cells.push(current.trim().replace(/\\\|/g, '|'));
+  return cells;
+};
+
+const isMarkdownTableHeader = (line: string) => {
+  if (!line.includes('|')) return false;
+  const cells = splitMarkdownTableRow(line);
+  return cells.length > 1 && cells.some((cell) => cell.length > 0);
+};
+
+const isMarkdownTableSeparator = (line: string, columnCount: number) => {
+  if (!line.includes('|')) return false;
+  const cells = splitMarkdownTableRow(line);
+  if (cells.length !== columnCount) return false;
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, '')));
+};
+
+const getMarkdownTableAlignment = (cell: string): MarkdownTableAlignment => {
+  const normalized = cell.replace(/\s/g, '');
+  const alignLeft = normalized.startsWith(':');
+  const alignRight = normalized.endsWith(':');
+
+  if (alignLeft && alignRight) return 'center';
+  if (alignRight) return 'right';
+  if (alignLeft) return 'left';
+  return null;
+};
+
+const getCodeFenceMarker = (line: string) => {
+  const match = line.match(/^\s*(`{3,}|~{3,})/);
+  return match ? match[1] : null;
+};
+
+const parseMarkdownBlocks = (content: string): MarkdownBlock[] => {
+  const lines = content.split('\n');
+  const blocks: MarkdownBlock[] = [];
+  const markdownBuffer: string[] = [];
+  let activeFenceMarker: string | null = null;
+
+  const flushMarkdownBuffer = () => {
+    if (markdownBuffer.length === 0) return;
+    blocks.push({ type: 'markdown', content: markdownBuffer.join('\n') });
+    markdownBuffer.length = 0;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fenceMarker = getCodeFenceMarker(line);
+
+    if (fenceMarker) {
+      if (!activeFenceMarker) {
+        activeFenceMarker = fenceMarker;
+      } else if (fenceMarker[0] === activeFenceMarker[0] && fenceMarker.length >= activeFenceMarker.length) {
+        activeFenceMarker = null;
+      }
+      markdownBuffer.push(line);
+      continue;
+    }
+
+    if (activeFenceMarker) {
+      markdownBuffer.push(line);
+      continue;
+    }
+
+    const headerCells = splitMarkdownTableRow(line);
+    const nextLine = lines[index + 1];
+
+    if (nextLine && isMarkdownTableHeader(line) && isMarkdownTableSeparator(nextLine, headerCells.length)) {
+      flushMarkdownBuffer();
+
+      const rows: string[][] = [];
+      let rowIndex = index + 2;
+
+      while (rowIndex < lines.length) {
+        const rowLine = lines[rowIndex];
+        if (!rowLine.trim() || !rowLine.includes('|')) break;
+
+        const rowCells = splitMarkdownTableRow(rowLine);
+        if (rowCells.length !== headerCells.length || isMarkdownTableSeparator(rowLine, headerCells.length)) break;
+
+        rows.push(rowCells);
+        rowIndex += 1;
+      }
+
+      blocks.push({
+        type: 'table',
+        header: headerCells,
+        rows,
+        alignments: splitMarkdownTableRow(nextLine).map(getMarkdownTableAlignment)
+      });
+
+      index = rowIndex - 1;
+      continue;
+    }
+
+    markdownBuffer.push(line);
+  }
+
+  flushMarkdownBuffer();
+  return blocks;
+};
+
 const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
   <div
     className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
@@ -152,64 +375,65 @@ const Card = ({ children, className = '' }: { children: ReactNode; className?: s
   </div>
 );
 
-const AgentMarkdown = ({ content }: { content: string }) => (
-  <div className="prose prose-sm max-w-none break-words text-inherit prose-headings:text-inherit prose-p:text-inherit prose-strong:text-inherit prose-li:text-inherit prose-blockquote:text-slate-600 prose-hr:border-slate-200 dark:prose-invert dark:prose-blockquote:text-slate-300 dark:prose-hr:border-slate-700">
-    <ReactMarkdown
-      components={{
-        a: ({ href, children, ...props }: MarkdownElementProps<'a'>) => (
-          <a
-            {...props}
-            href={href}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="font-medium text-sky-600 underline decoration-sky-300 underline-offset-2 transition hover:text-sky-500 dark:text-sky-300 dark:decoration-sky-500/40 dark:hover:text-sky-200"
-          >
-            {children}
-          </a>
-        ),
-        pre: ({ children, ...props }: MarkdownElementProps<'pre'>) => (
-          <pre
-            {...props}
-            className="my-3 overflow-x-auto rounded-xl bg-slate-950 px-4 py-3 text-[13px] leading-6 text-slate-100"
-          >
-            {children}
-          </pre>
-        ),
-        code: ({ children, className, inline, ...props }: MarkdownElementProps<'code'>) => {
-          const codeText = String(children ?? '').replace(/\n$/, '');
-          const isBlock = Boolean(inline === false || className || codeText.includes('\n'));
+const AgentMarkdown = ({ content }: { content: string }) => {
+  const blocks = parseMarkdownBlocks(content);
 
-          if (isBlock) {
-            return (
-              <code {...props} className={`block font-mono text-[13px] leading-6 text-slate-100 ${className ?? ''}`.trim()}>
-                {codeText}
-              </code>
-            );
-          }
+  return (
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        if (block.type === 'markdown') {
+          return <MarkdownContent key={`markdown-${index}`} content={block.content} />;
+        }
 
-          return (
-            <code
-              {...props}
-              className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-rose-600 before:content-none after:content-none dark:bg-slate-700/80 dark:text-rose-200"
-            >
-              {children}
-            </code>
-          );
-        },
-        blockquote: ({ children, ...props }: MarkdownElementProps<'blockquote'>) => (
-          <blockquote
-            {...props}
-            className="my-3 border-l-4 border-slate-300 bg-slate-50/70 py-1 pl-4 italic text-slate-600 dark:border-slate-600 dark:bg-slate-700/20 dark:text-slate-300"
+        return (
+          <div
+            key={`table-${index}`}
+            className="my-2 overflow-x-auto rounded-xl border border-slate-200/80 bg-white/70 shadow-sm dark:border-slate-700 dark:bg-slate-900/50"
           >
-            {children}
-          </blockquote>
-        )
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  </div>
-);
+            <table className="min-w-full border-collapse text-sm text-slate-700 dark:text-slate-200">
+              <thead className="bg-slate-100/80 dark:bg-slate-800/90">
+                <tr>
+                  {block.header.map((cell, cellIndex) => {
+                    const alignment = block.alignments[cellIndex];
+                    return (
+                      <th
+                        key={`header-${cellIndex}`}
+                        className={`border-b border-slate-200 px-3 py-2 align-top font-semibold dark:border-slate-700 ${
+                          alignment ? tableAlignmentClassName[alignment] : 'text-left'
+                        }`}
+                      >
+                        <MarkdownContent content={cell} className={compactMarkdownClassName} />
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {block.rows.map((row, rowIndex) => (
+                  <tr key={`row-${rowIndex}`} className="border-t border-slate-200/80 dark:border-slate-700/80">
+                    {row.map((cell, cellIndex) => {
+                      const alignment = block.alignments[cellIndex];
+                      return (
+                        <td
+                          key={`cell-${rowIndex}-${cellIndex}`}
+                          className={`px-3 py-2 align-top ${
+                            alignment ? tableAlignmentClassName[alignment] : 'text-left'
+                          }`}
+                        >
+                          <MarkdownContent content={cell} className={compactMarkdownClassName} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 export default function AgentConsole() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
