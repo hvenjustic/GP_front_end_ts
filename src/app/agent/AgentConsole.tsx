@@ -64,9 +64,8 @@ type ReviewItem = {
   name?: string | null;
   site_name?: string | null;
   url: string;
-  llm_processed_at?: string | null;
+  graph_built_at?: string | null;
   updated_at?: string | null;
-  on_sale: boolean;
 };
 
 type ReviewResponse = {
@@ -75,6 +74,8 @@ type ReviewResponse = {
   page: number;
   page_size: number;
 };
+
+type ReviewAction = 'approve' | 'reject';
 
 type StreamToken = {
   type: 'token';
@@ -229,7 +230,8 @@ export default function AgentConsole() {
   const [reviewTotal, setReviewTotal] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState('');
-  const [reviewUpdatingId, setReviewUpdatingId] = useState<number | null>(null);
+  const [selectedReviewIds, setSelectedReviewIds] = useState<number[]>([]);
+  const [reviewSubmittingAction, setReviewSubmittingAction] = useState<ReviewAction | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
   const streamTracesRef = useRef<TraceItem[]>([]);
@@ -245,6 +247,11 @@ export default function AgentConsole() {
   }, [messages, streamBuffer, streamTraces, isStreaming]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
+  const selectedReviewIdSet = useMemo(() => new Set(selectedReviewIds), [selectedReviewIds]);
+  const allReviewItemsSelected = useMemo(
+    () => reviewItems.length > 0 && reviewItems.every((item) => selectedReviewIdSet.has(item.id)),
+    [reviewItems, selectedReviewIdSet]
+  );
 
   useEffect(() => {
     try {
@@ -510,34 +517,75 @@ export default function AgentConsole() {
       const res = await fetch(`${AGENT_API_BASE}/api/products/review?page=1&page_size=20`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as ReviewResponse;
-      setReviewItems(json.items || []);
-      setReviewTotal(Number.isFinite(json.total) ? json.total : (json.items || []).length);
+      const nextItems = json.items || [];
+      const nextIds = new Set(nextItems.map((item) => item.id));
+      setReviewItems(nextItems);
+      setReviewTotal(Number.isFinite(json.total) ? json.total : nextItems.length);
+      setSelectedReviewIds((prev) => prev.filter((id) => nextIds.has(id)));
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : '未知错误');
       setReviewItems([]);
       setReviewTotal(0);
+      setSelectedReviewIds([]);
     } finally {
       setReviewLoading(false);
     }
   };
 
-  const handleSetOnSale = async (taskId: number) => {
-    if (reviewUpdatingId) return;
-    setReviewUpdatingId(taskId);
+  const submitReviewAction = async (ids: number[], action: ReviewAction) => {
+    if (reviewSubmittingAction) return;
+    const normalizedIds = [...new Set(ids.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0))];
+    if (!normalizedIds.length) {
+      setReviewError('请先选择待审核图谱');
+      return;
+    }
+    setReviewSubmittingAction(action);
     setReviewError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/products/on_sale`, {
+      const res = await fetch(`${AGENT_API_BASE}/api/products/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [taskId] })
+        body: JSON.stringify({ ids: normalizedIds, action })
       });
-      if (!res.ok) throw new Error(`请求失败：${res.status}`);
+      if (!res.ok) {
+        let message = `请求失败：${res.status}`;
+        try {
+          const payload = (await res.json()) as { error?: string; detail?: string };
+          if (payload?.error || payload?.detail) {
+            message = payload.error || payload.detail || message;
+          }
+        } catch {
+          // ignore malformed error payload
+        }
+        throw new Error(message);
+      }
+      setSelectedReviewIds((prev) => prev.filter((id) => !normalizedIds.includes(id)));
       await fetchReviewItems();
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : '未知错误');
     } finally {
-      setReviewUpdatingId(null);
+      setReviewSubmittingAction(null);
     }
+  };
+
+  const toggleReviewSelection = (id: number) => {
+    setSelectedReviewIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const toggleAllReviewSelection = () => {
+    if (allReviewItemsSelected) {
+      setSelectedReviewIds([]);
+      return;
+    }
+    setSelectedReviewIds(reviewItems.map((item) => item.id));
+  };
+
+  const handleBatchReview = (action: ReviewAction) => {
+    void submitReviewAction(selectedReviewIds, action);
+  };
+
+  const handleSingleReview = (id: number, action: ReviewAction) => {
+    void submitReviewAction([id], action);
   };
 
   const handleFetchBuildable = () => {
@@ -726,7 +774,7 @@ export default function AgentConsole() {
                   审核待办
                 </div>
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-100">
-                  待上架 {reviewTotal}
+                  待审核 {reviewTotal}
                 </span>
               </div>
               <div className="mb-3 flex flex-wrap gap-2">
@@ -739,8 +787,34 @@ export default function AgentConsole() {
                 <button
                   onClick={handleBatchBuild}
                   className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                >
+                  >
                   批量构建
+                </button>
+              </div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={allReviewItemsSelected}
+                    onChange={toggleAllReviewSelection}
+                    disabled={reviewItems.length === 0 || reviewSubmittingAction !== null}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                  />
+                  全选当前页
+                </label>
+                <button
+                  onClick={() => handleBatchReview('approve')}
+                  disabled={selectedReviewIds.length === 0 || reviewSubmittingAction !== null}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {reviewSubmittingAction === 'approve' ? '批准中...' : `批准选中 ${selectedReviewIds.length}`}
+                </button>
+                <button
+                  onClick={() => handleBatchReview('reject')}
+                  disabled={selectedReviewIds.length === 0 || reviewSubmittingAction !== null}
+                  className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {reviewSubmittingAction === 'reject' ? '拒绝中...' : `拒绝选中 ${selectedReviewIds.length}`}
                 </button>
               </div>
               <div className="space-y-3">
@@ -756,33 +830,54 @@ export default function AgentConsole() {
                 )}
                 {!reviewLoading && !reviewError && reviewItems.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
-                    暂无待上架商品
+                    暂无待审核图谱
                   </div>
                 )}
                 {reviewItems.map((item) => {
-                  const title = item.name || item.site_name || '待上架商品';
-                  const updatedLabel = formatTime(item.llm_processed_at || item.updated_at);
-                  const isUpdating = reviewUpdatingId === item.id;
+                  const title = item.name || item.site_name || '待审核图谱';
+                  const updatedLabel = formatTime(item.graph_built_at || item.updated_at);
+                  const isChecked = selectedReviewIdSet.has(item.id);
+                  const isSubmitting = reviewSubmittingAction !== null;
                   return (
                     <div
                       key={item.id}
                       className="rounded-xl border border-slate-200/70 p-3 shadow-sm dark:border-slate-800/70"
                     >
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-300">{item.url}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">图谱完成: {updatedLabel}</p>
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleReviewSelection(item.id)}
+                          disabled={isSubmitting}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
+                          <p className="break-all text-sm text-slate-600 dark:text-slate-300">{item.url}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">图谱完成: {updatedLabel}</p>
+                        </div>
+                      </div>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
                           <FiClock className="h-4 w-4" />
-                          待上架
+                          待审核
                         </span>
-                        <button
-                          onClick={() => handleSetOnSale(item.id)}
-                          disabled={isUpdating}
-                          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                        >
-                          {isUpdating ? '上架中...' : '上架'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleSingleReview(item.id, 'reject')}
+                            disabled={isSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200"
+                          >
+                            拒绝
+                          </button>
+                          <button
+                            onClick={() => handleSingleReview(item.id, 'approve')}
+                            disabled={isSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                          >
+                            批准
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
