@@ -1,7 +1,7 @@
 # 前端（GP_front_end_ts）
 
 ## 项目说明
-本项目为知识图谱电商场景的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供任务录入、结果查看、图谱可视化与 Agent 对话的运营台。
+本项目为网站信息知识图谱场景的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供任务录入、结果查看、图谱可视化与 Agent 对话的运营台。
 
 ## 当前已实现功能
 - 首页概览与导航入口

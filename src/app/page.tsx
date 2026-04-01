@@ -120,7 +120,7 @@ export default function Home() {
             </div>
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-white md:text-4xl">
-                知识图谱电商 · 运营与导购的一体化前台。
+                网站信息知识图谱 · 运营与导购的一体化前台。
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
                 基于 Next.js 与 Tailwind 的前端壳，嵌入了图谱商品关系、运营 Agent 面板、对话导购入口。可直接接入后端接口或 LangChain 服务。
