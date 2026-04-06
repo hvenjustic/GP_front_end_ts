@@ -1,11 +1,10 @@
 # 前端（GP_front_end_ts）
 
 ## 项目说明
-本项目为网站信息知识图谱场景的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供任务录入、结果查看、图谱可视化与 Agent 对话的运营台。
+本项目为网站信息知识图谱场景的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供结果查看、图谱可视化与 Agent 对话的运营台。
 
 ## 当前已实现功能
 - 首页概览与导航入口
-- `/task`：批量提交站点任务，查看 crawl/preprocess/graph 队列状态，支持清空队列
 - `/result`：分页列表，多选 Crawl 入队、多选图谱生成，支持详情弹窗
 - `/result/detail` 与 `/result/detail/graph`：结果详情与图谱可视化
 - `/products`：仅展示 `graph_json` 不为空的任务，并可内嵌图谱

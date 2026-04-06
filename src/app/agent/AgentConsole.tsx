@@ -75,6 +75,30 @@ type ReviewResponse = {
   page_size: number;
 };
 
+type QueueStatusResponse = {
+  pending: number;
+  queue_key: string;
+};
+
+type ResultStatusItem = {
+  id: number;
+  status: string;
+  has_processed_markdown?: boolean;
+};
+
+type ResultListResponse = {
+  items: ResultStatusItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+type ProductListResponse = {
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 type ReviewAction = 'approve' | 'reject';
 
 type StreamToken = {
@@ -108,22 +132,16 @@ type StreamTrace = {
 };
 
 const executionTimeline = [
-  { label: '库存巡检', status: '完成', detail: '检查 128 个 SKU，发现 8 个低库存', time: '刚刚', tone: 'emerald' },
-  { label: '价格对比', status: '执行中', detail: '对接竞品 API 计算差价', time: '进行中', tone: 'indigo' },
-  { label: '推荐生成', status: '排队', detail: '等待 LangChain 调用推荐链', time: '排队', tone: 'amber' },
-  { label: '客服草稿', status: '待审', detail: '3 条回复等待人工确认', time: '5 分钟前', tone: 'slate' }
+  { label: '爬取队列巡检', status: '待机', detail: '等待新的爬取任务进入队列', time: '刚刚', tone: 'slate' },
+  { label: '图谱构建巡检', status: '待机', detail: '等待新的构建任务进入队列', time: '刚刚', tone: 'slate' },
+  { label: '上架审核巡检', status: '待机', detail: '等待新的图谱进入审核流程', time: '刚刚', tone: 'slate' },
+  { label: '构建资源盘点', status: '待机', detail: '等待计算可构建站点数量', time: '刚刚', tone: 'slate' }
 ];
 
 const automations = [
   { title: '库存巡检与自动上架', status: '监控中', owner: '运营 Agent', steps: ['读取库存节点', '触发补货工单', '库存恢复自动上架'] },
   { title: '智能调价与关联推荐', status: '试运行', owner: '定价 Agent', steps: ['竞品比价', '生成加购/替代推荐', '等待确认执行'] },
   { title: '客服对话助手', status: '活跃', owner: '对话 Agent', steps: ['意图识别', '知识检索', '多轮回复草稿'] }
-];
-
-const liveStats = [
-  { label: '待处理补货', value: '8', hint: '库存低于安全阈值', icon: FiPackage },
-  { label: '价格异常', value: '3', hint: '与竞品差价超 15%', icon: FiTrendingUp },
-  { label: '图谱同步', value: '15 分钟前', hint: '最近写入时间', icon: FiDatabase }
 ];
 
 const toneColor: Record<string, string> = {
@@ -163,6 +181,9 @@ const markdownClassName =
 
 const compactMarkdownClassName =
   'prose prose-sm max-w-none break-words text-inherit prose-p:my-0 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-code:text-[0.85em] prose-headings:my-1 prose-blockquote:my-1 dark:prose-invert';
+
+const RESULT_PAGE_SIZE = 100;
+const BUILDABLE_STATUSES = new Set(['CRAWLED', 'GRAPH_FAILED', 'GRAPH_DONE', 'GRAPH_CANCELLED']);
 
 const tableAlignmentClassName: Record<Exclude<MarkdownTableAlignment, null>, string> = {
   left: 'text-left',
@@ -456,11 +477,18 @@ export default function AgentConsole() {
   const [reviewError, setReviewError] = useState('');
   const [selectedReviewIds, setSelectedReviewIds] = useState<number[]>([]);
   const [reviewSubmittingAction, setReviewSubmittingAction] = useState<ReviewAction | null>(null);
+  const [crawlPending, setCrawlPending] = useState<number | null>(null);
+  const [graphPending, setGraphPending] = useState<number | null>(null);
+  const [onSaleTotal, setOnSaleTotal] = useState<number | null>(null);
+  const [buildableTotal, setBuildableTotal] = useState<number | null>(null);
+  const [progressError, setProgressError] = useState('');
+  const [progressUpdatedAt, setProgressUpdatedAt] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const streamBufferRef = useRef('');
   const streamTracesRef = useRef<TraceItem[]>([]);
   const copyFeedbackTimerRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const progressPollingRef = useRef<number | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -519,6 +547,9 @@ export default function AgentConsole() {
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
+      if (progressPollingRef.current) {
+        window.clearInterval(progressPollingRef.current);
+      }
       if (copyFeedbackTimerRef.current) {
         window.clearTimeout(copyFeedbackTimerRef.current);
       }
@@ -534,6 +565,117 @@ export default function AgentConsole() {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
   };
+
+  const formatMetricValue = (value: number | null) => {
+    if (value === null) return '—';
+    return String(value);
+  };
+
+  const isBuildableResult = (item: ResultStatusItem) => {
+    const normalizedStatus = String(item.status || '').trim().toUpperCase();
+    if (normalizedStatus === 'CRAWLED') {
+      return true;
+    }
+    return BUILDABLE_STATUSES.has(normalizedStatus) && Boolean(item.has_processed_markdown);
+  };
+
+  const fetchQueuePending = async (path: string) => {
+    const res = await fetch(`${AGENT_API_BASE}${path}`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`请求失败：${res.status}`);
+    }
+    const json = (await res.json()) as QueueStatusResponse;
+    return Number.isFinite(json.pending) ? json.pending : 0;
+  };
+
+  const fetchOnSaleProductTotal = async () => {
+    const res = await fetch(`${AGENT_API_BASE}/api/products?page=1&page_size=1`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`请求失败：${res.status}`);
+    }
+    const json = (await res.json()) as ProductListResponse;
+    return Number.isFinite(json.total) ? json.total : 0;
+  };
+
+  const fetchBuildableTotal = async () => {
+    let page = 1;
+    let total = 0;
+    let buildable = 0;
+
+    while (page === 1 || (page - 1) * RESULT_PAGE_SIZE < total) {
+      const res = await fetch(
+        `${AGENT_API_BASE}/api/results?page=${page}&page_size=${RESULT_PAGE_SIZE}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok) {
+        throw new Error(`请求失败：${res.status}`);
+      }
+
+      const json = (await res.json()) as ResultListResponse;
+      const items = Array.isArray(json.items) ? json.items : [];
+      total = Number.isFinite(json.total) ? json.total : items.length;
+      buildable += items.filter(isBuildableResult).length;
+
+      if (items.length === 0) {
+        break;
+      }
+      page += 1;
+    }
+
+    return buildable;
+  };
+
+  const refreshExecutionProgress = async () => {
+    const results = await Promise.allSettled([
+      fetchQueuePending('/api/tasks/status'),
+      fetchQueuePending('/api/results/graph/status'),
+      fetchOnSaleProductTotal(),
+      fetchBuildableTotal()
+    ]);
+
+    const errors: string[] = [];
+
+    if (results[0].status === 'fulfilled') {
+      setCrawlPending(results[0].value);
+    } else {
+      errors.push(`爬取进度获取失败：${results[0].reason instanceof Error ? results[0].reason.message : '未知错误'}`);
+    }
+
+    if (results[1].status === 'fulfilled') {
+      setGraphPending(results[1].value);
+    } else {
+      errors.push(`构建进度获取失败：${results[1].reason instanceof Error ? results[1].reason.message : '未知错误'}`);
+    }
+
+    if (results[2].status === 'fulfilled') {
+      setOnSaleTotal(results[2].value);
+    } else {
+      errors.push(`上架进度获取失败：${results[2].reason instanceof Error ? results[2].reason.message : '未知错误'}`);
+    }
+
+    if (results[3].status === 'fulfilled') {
+      setBuildableTotal(results[3].value);
+    } else {
+      errors.push(`可构建数量获取失败：${results[3].reason instanceof Error ? results[3].reason.message : '未知错误'}`);
+    }
+
+    setProgressUpdatedAt(Date.now());
+    setProgressError(errors[0] || '');
+  };
+
+  useEffect(() => {
+    void refreshExecutionProgress();
+    progressPollingRef.current = window.setInterval(() => {
+      void refreshExecutionProgress();
+    }, 60000);
+
+    return () => {
+      if (progressPollingRef.current) {
+        window.clearInterval(progressPollingRef.current);
+        progressPollingRef.current = null;
+      }
+    };
+  }, []);
 
   const traceTimeline = useMemo(() => {
     const latestAgentTrace = [...messages]
@@ -552,6 +694,42 @@ export default function AgentConsole() {
       }))
       .reverse();
   }, [messages, streamTraces]);
+
+  const executionProgressCards = [
+    {
+      label: '爬取进度',
+      value: formatMetricValue(crawlPending),
+      hint: crawlPending === null ? '等待同步队列状态' : `排队或执行中 ${crawlPending} 个任务`,
+      icon: FiActivity,
+      tone: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-200'
+    },
+    {
+      label: '构建进度',
+      value: formatMetricValue(graphPending),
+      hint: graphPending === null ? '等待同步图谱状态' : `排队或构建中 ${graphPending} 个任务`,
+      icon: FiDatabase,
+      tone: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-200'
+    },
+    {
+      label: '上架进度',
+      value: formatMetricValue(onSaleTotal),
+      hint:
+        onSaleTotal === null
+          ? '等待同步商品状态'
+          : reviewTotal > 0
+            ? `已上架商品 ${onSaleTotal} 个，待审核 ${reviewTotal} 个`
+            : `已上架商品 ${onSaleTotal} 个`,
+      icon: FiPackage,
+      tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200'
+    },
+    {
+      label: '可构建数量',
+      value: formatMetricValue(buildableTotal),
+      hint: buildableTotal === null ? '等待计算可构建任务' : `当前可直接构建 ${buildableTotal} 个站点`,
+      icon: FiTrendingUp,
+      tone: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200'
+    }
+  ];
 
   const flashCopiedState = (messageKey: string) => {
     setCopiedMessageKey(messageKey);
@@ -785,6 +963,7 @@ export default function AgentConsole() {
       }
       setSelectedReviewIds((prev) => prev.filter((id) => !normalizedIds.includes(id)));
       await fetchReviewItems();
+      await refreshExecutionProgress();
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : '未知错误');
     } finally {
@@ -948,6 +1127,36 @@ export default function AgentConsole() {
                   实时
                 </span>
               </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {executionProgressCards.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-800/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{item.label}</p>
+                        <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{item.value}</p>
+                      </div>
+                      <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
+                        <item.icon className="h-5 w-5" />
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.hint}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+                <span>{progressUpdatedAt ? `最近同步：${formatTime(new Date(progressUpdatedAt).toISOString())}` : '最近同步：—'}</span>
+                {progressError ? <span className="text-amber-600 dark:text-amber-300">{progressError}</span> : null}
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                <FiTrendingUp className="h-4 w-4 text-indigo-500" />
+                最近执行轨迹
+              </div>
               <div className="space-y-3">
                 {traceTimeline.map((item, idx) => (
                   <div
@@ -962,27 +1171,6 @@ export default function AgentConsole() {
                     </div>
                     <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{item.detail}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">时间：{item.time}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card>
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                <FiTrendingUp className="h-4 w-4 text-indigo-500" />
-                关键指标
-              </div>
-              <div className="space-y-3">
-                {liveStats.map((stat) => (
-                  <div key={stat.label} className="flex items-center justify-between rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-800/70">
-                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                      <stat.icon className="h-4 w-4 text-indigo-500" />
-                      {stat.label}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-base font-semibold text-slate-900 dark:text-white">{stat.value}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{stat.hint}</p>
-                    </div>
                   </div>
                 ))}
               </div>
