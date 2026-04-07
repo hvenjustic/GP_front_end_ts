@@ -4,6 +4,7 @@
   --background: #f8fafc;
   --foreground: #0f172a;
   --surface: rgba(255, 255, 255, 0.75);
+  --radius-global: 0.4rem;
 }
 
 :root.dark {
@@ -39,6 +40,18 @@ a:hover {
   background: var(--surface);
   border: 1px solid rgba(148, 163, 184, 0.25);
   box-shadow: 0 10px 50px rgba(15, 23, 42, 0.08);
+}
+
+.rounded-md,
+.rounded-lg,
+.rounded-xl,
+.rounded-2xl,
+.rounded-3xl {
+  border-radius: var(--radius-global);
+}
+
+.rounded-tr-md {
+  border-top-right-radius: var(--radius-global);
 }
 
 @keyframes floatPulse {

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FiActivity,
   FiAlertTriangle,
+  FiChevronRight,
   FiCheck,
   FiClock,
   FiCopy,
@@ -450,6 +451,98 @@ const AgentMarkdown = ({ content }: { content: string }) => {
   );
 };
 
+const isTracePayloadRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const formatTraceTimeLabel = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+};
+
+const compactTraceValue = (value: unknown, maxLength = 180) => {
+  if (value === null || value === undefined) return '';
+  const text =
+    typeof value === 'string'
+      ? value
+      : Array.isArray(value) || typeof value === 'object'
+        ? JSON.stringify(value, null, 0)
+        : String(value);
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}...`;
+};
+
+const traceToneClassName = (trace: TraceItem) => {
+  if (trace.level === 'error' || trace.stage === 'error') {
+    return 'border-rose-200/80 bg-rose-50/80 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100';
+  }
+  if (trace.level === 'warning') {
+    return 'border-amber-200/80 bg-amber-50/80 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100';
+  }
+  if (trace.stage === 'tool_result') {
+    return 'border-emerald-200/80 bg-emerald-50/80 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100';
+  }
+  if (trace.stage === 'tool_call') {
+    return 'border-sky-200/80 bg-sky-50/80 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-100';
+  }
+  return 'border-slate-200/80 bg-slate-50/80 text-slate-800 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-100';
+};
+
+const traceSummaryTitle = (trace: TraceItem) => {
+  const payload = isTracePayloadRecord(trace.payload) ? trace.payload : null;
+  const toolName =
+    typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : 'unknown';
+
+  switch (trace.stage) {
+    case 'tool_plan': {
+      const names = Array.isArray(payload?.tool_names)
+        ? payload.tool_names.map((item) => String(item).trim()).filter(Boolean)
+        : [];
+      if (names.length > 0) {
+        return `准备执行 ${names.join(' / ')}`;
+      }
+      return trace.step || '已生成工具计划';
+    }
+    case 'tool_call':
+      return `调用 ${toolName}`;
+    case 'tool_result':
+      return `${toolName} ${payload?.ok === false ? '执行失败' : '已返回结果'}`;
+    default:
+      return trace.step || '处理中';
+  }
+};
+
+const traceSummaryDetail = (trace: TraceItem) => {
+  const payload = isTracePayloadRecord(trace.payload) ? trace.payload : null;
+
+  switch (trace.stage) {
+    case 'assistant_progress': {
+      const round =
+        typeof payload?.round === 'number' && Number.isFinite(payload.round)
+          ? `第 ${payload.round} 轮`
+          : '';
+      return round;
+    }
+    case 'tool_plan': {
+      const toolCalls =
+        typeof payload?.tool_calls === 'number' && Number.isFinite(payload.tool_calls)
+          ? `${payload.tool_calls} 个工具待执行`
+          : '';
+      return toolCalls;
+    }
+    case 'tool_call':
+      return compactTraceValue(payload?.args) || trace.step;
+    case 'tool_result':
+      return compactTraceValue(payload?.result_preview) || trace.step;
+    case 'error':
+      return compactTraceValue(trace.step);
+    default:
+      return '';
+  }
+};
+
 export default function AgentConsole() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -457,6 +550,7 @@ export default function AgentConsole() {
   const [streamBuffer, setStreamBuffer] = useState('');
   const [streamTraces, setStreamTraces] = useState<TraceItem[]>([]);
   const [copiedMessageKey, setCopiedMessageKey] = useState<string | null>(null);
+  const [collapsedTracePanels, setCollapsedTracePanels] = useState<Record<string, boolean>>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [activeSessionTitle, setActiveSessionTitle] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -816,6 +910,7 @@ export default function AgentConsole() {
     streamTracesRef.current = [];
     setStreamBuffer('');
     setStreamTraces([]);
+    setCollapsedTracePanels((prev) => ({ ...prev, 'streaming-trace': false }));
     const params = new URLSearchParams({ message: query });
     if (sessionId) params.set('session_id', sessionId);
     const url = `${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`;
@@ -1013,6 +1108,7 @@ export default function AgentConsole() {
   const resetChat = () => {
     stopStream();
     setMessages([]);
+    setCollapsedTracePanels({});
     setSessionId(null);
     setActiveSessionTitle(null);
     closeHistory();
@@ -1038,6 +1134,84 @@ export default function AgentConsole() {
     return mapped;
   };
 
+  const renderTracePanel = (
+    traces: TraceItem[],
+    summaryLabel: string,
+    panelKey: string,
+    streaming = false
+  ) => {
+    if (!Array.isArray(traces) || traces.length === 0) return null;
+    const isCollapsed = Boolean(collapsedTracePanels[panelKey]);
+
+    return (
+      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/70">
+        <button
+          type="button"
+          onClick={() =>
+            setCollapsedTracePanels((prev) => ({
+              ...prev,
+              [panelKey]: !prev[panelKey]
+            }))
+          }
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-slate-700 dark:text-slate-200"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+              {streaming ? (
+                <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FiDatabase className="h-3.5 w-3.5" />
+              )}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-900 dark:text-white">{summaryLabel}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {streaming ? '正在实时更新工具执行过程' : `共记录 ${traces.length} 步`}
+              </div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            <FiChevronRight className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+            {isCollapsed ? '展开过程' : '收起过程'}
+          </span>
+        </button>
+        {!isCollapsed && (
+          <div className="border-t border-slate-200/80 px-4 py-4 dark:border-slate-800">
+            <div className="space-y-3">
+              {traces.map((trace, traceIdx) => {
+                const detail = traceSummaryDetail(trace);
+                const timeLabel = formatTraceTimeLabel(trace.time);
+                const isCompactTrace = trace.stage === 'tool_call';
+                return (
+                  <div
+                    key={`trace-${traceIdx}-${trace.step}`}
+                    className={`rounded-2xl border px-4 py-3 ${traceToneClassName(trace)}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className={`text-sm font-semibold ${isCompactTrace ? 'leading-5' : 'leading-6'}`}>
+                          {traceSummaryTitle(trace)}
+                        </div>
+                      </div>
+                      {timeLabel ? <div className="text-[11px] opacity-70">{timeLabel}</div> : null}
+                    </div>
+                    {detail ? (
+                      <div
+                        className={`opacity-80 ${isCompactTrace ? 'mt-1 text-[13px] leading-5' : 'mt-2 text-sm leading-6'}`}
+                      >
+                        {detail}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const loadHistorySession = async (session: AgentSession) => {
     setHistoryDetailLoadingId(session.session_id);
     setHistoryError('');
@@ -1047,6 +1221,7 @@ export default function AgentConsole() {
       const json = (await res.json()) as AgentSessionDetailResponse;
       stopStream();
       setMessages(mapHistoryMessages(json.messages || []));
+      setCollapsedTracePanels({});
       setSessionId(json.session.session_id);
       setActiveSessionTitle(json.session.title || null);
       setHistoryOpen(false);
@@ -1108,7 +1283,7 @@ export default function AgentConsole() {
           <div className="flex flex-wrap items-center justify-between gap-1" />
         </div>
 
-        <div className="mt-6 grid flex-1 min-h-0 gap-4 md:grid-cols-[1fr_1fr_2.2fr]">
+        <div className="mt-1 grid flex-1 min-h-0 gap-4 md:grid-cols-[1fr_1fr_2.2fr]">
           {/* 执行进度 */}
           <div className="space-y-4 overflow-y-auto pr-1 md:col-span-1">
             <Card>
@@ -1411,76 +1586,85 @@ export default function AgentConsole() {
 
               {/* Chat Messages Area */}
               <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
-                <div className="mx-auto max-w-3xl space-y-6">
+                <div className="mx-auto w-full max-w-[72rem] space-y-8">
                   {messages.map((msg, idx) => {
                     const messageKey = `${msg.role}-${idx}`;
                     const isCopied = copiedMessageKey === messageKey;
 
-                    return (
-                      <div key={messageKey} className={`group flex flex-col ${msg.role === 'agent' ? 'items-start' : 'items-end'}`}>
-                        {/* Agent Thinking Box */}
-                        {msg.role === 'agent' && Array.isArray(msg.traces) && msg.traces.length > 0 && (
-                          <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-sky-100 bg-sky-50/80 p-3 backdrop-blur-sm transition-all duration-500 dark:border-sky-900/30 dark:bg-sky-900/20">
-                            <div className="flex items-center gap-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
-                              <div className="h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-                              思考过程
-                            </div>
-                            <div className="mt-2 space-y-2">
-                              {msg.traces.map((trace, traceIdx) => (
-                                <div key={`${idx}-trace-${traceIdx}`} className="group relative border-l-2 border-sky-200 pl-3 transition-all hover:border-sky-400 dark:border-sky-800">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '分析中'}</span>
-                                    {trace.time && <span className="text-[10px] text-slate-400 opacity-0 group-hover:opacity-100">{formatTime(trace.time)}</span>}
-                                  </div>
-                                  <div className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{trace.step}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Message Bubble */}
-                        <div className="max-w-[85%]">
-                          <div
-                            className={`relative rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm transition-all duration-300 ${msg.role === 'agent'
-                                ? 'rounded-tl-none border border-slate-100 bg-white text-slate-800 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
-                                : 'rounded-tr-none bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100'
-                              }`}
-                          >
-                            {msg.role === 'agent' ? (
-                              <AgentMarkdown content={msg.text} />
-                            ) : (
+                    if (msg.role === 'user') {
+                      return (
+                        <div key={messageKey} className="group flex justify-end">
+                          <div className="max-w-[78%]">
+                            <div className="rounded-3xl rounded-tr-md bg-slate-100 px-5 py-3 text-sm leading-7 text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100">
                               <div className="whitespace-pre-wrap">{msg.text}</div>
-                            )}
-                            {msg.citations && msg.citations.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1 border-t border-dashed border-current/20 pt-2 opacity-80">
-                                {msg.citations.map((cite, i) => (
-                                  <span key={i} className="inline-flex items-center rounded bg-current/10 px-1.5 py-0.5 text-[10px]">
-                                    引用 {i + 1}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div
-                            className={`mt-2 flex ${msg.role === 'agent' ? 'justify-start pl-1' : 'justify-end pr-1'} transition-opacity duration-200 ${
-                              isCopied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => void copyMessageText(msg.text, messageKey)}
-                              aria-label={isCopied ? '已复制消息' : '复制消息'}
-                              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
-                                isCopied
-                                  ? 'text-emerald-700 dark:text-emerald-200'
-                                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                            </div>
+                            <div
+                              className={`mt-2 flex justify-end pr-1 transition-opacity duration-200 ${
+                                isCopied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                               }`}
                             >
-                              {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
-                              {isCopied ? '已复制' : '复制'}
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => void copyMessageText(msg.text, messageKey)}
+                                aria-label={isCopied ? '已复制消息' : '复制消息'}
+                                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                                  isCopied
+                                    ? 'text-emerald-700 dark:text-emerald-200'
+                                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                                }`}
+                              >
+                                {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
+                                {isCopied ? '已复制' : '复制'}
+                              </button>
+                            </div>
                           </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={messageKey}
+                        className="group w-full border-b border-slate-200/70 pb-8 last:border-b-0 dark:border-slate-800/80"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                            Agent
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void copyMessageText(msg.text, messageKey)}
+                            aria-label={isCopied ? '已复制消息' : '复制消息'}
+                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                              isCopied
+                                ? 'text-emerald-700 dark:text-emerald-200'
+                                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
+                            {isCopied ? '已复制' : '复制'}
+                          </button>
+                        </div>
+
+                        <div className="mt-3 space-y-4">
+                          {renderTracePanel(msg.traces || [], '工具执行过程', `${messageKey}-trace`)}
+
+                          <div className="min-h-[1.5rem] text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                            <AgentMarkdown content={msg.text} />
+                          </div>
+
+                          {msg.citations && msg.citations.length > 0 && (
+                            <div className="flex flex-wrap gap-2 border-t border-dashed border-slate-200 pt-3 dark:border-slate-800">
+                              {msg.citations.map((cite, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:text-slate-300"
+                                >
+                                  引用 {i + 1}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1488,36 +1672,32 @@ export default function AgentConsole() {
 
                   {/* Streaming State */}
                   {isStreaming && (
-                    <div className="flex flex-col items-start">
-                      {/* Streaming Thinking */}
-                      {(streamTraces.length > 0) && (
-                        <div className="mb-2 ml-1 w-full max-w-[90%] rounded-xl border border-amber-100 bg-amber-50/80 p-3 backdrop-blur-sm transition-all duration-300 dark:border-amber-900/30 dark:bg-amber-900/20">
-                          <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                            <FiRefreshCw className="h-3 w-3 animate-spin" />
-                            正在思考...
-                          </div>
-                          <div className="mt-2 space-y-2">
-                            {streamTraces.slice(-3).map((trace, traceIdx) => (
-                              <div key={`stream-trace-${traceIdx}`} className="border-l-2 border-amber-200 pl-3 transition-all duration-500 dark:border-amber-800">
-                                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">{trace.stage || '处理中'}</div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400">{trace.step}</div>
-                              </div>
-                            ))}
-                          </div>
+                    <div className="w-full border-b border-slate-200/70 pb-8 dark:border-slate-800/80">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                          Agent
                         </div>
-                      )}
+                        <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          处理中
+                        </div>
+                      </div>
 
-                      {/* Streaming Message Bubble */}
-                      <div className="relative max-w-[85%] rounded-2xl rounded-tl-none border border-slate-100 bg-white px-5 py-3 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-800 dark:text-slate-100">
-                        {streamBuffer ? (
-                          <AgentMarkdown content={streamBuffer} />
-                        ) : (
-                          <div className="flex items-center gap-1 py-1">
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
-                          </div>
-                        )}
+                      <div className="mt-3 space-y-4">
+                        {renderTracePanel(streamTraces, '工具执行过程', 'streaming-trace', true)}
+
+                        <div className="min-h-[1.5rem] text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                          {streamBuffer ? (
+                            <AgentMarkdown content={streamBuffer} />
+                          ) : (
+                            <div className="flex items-center gap-2 py-1 text-sm text-slate-500 dark:text-slate-400">
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
+                              正在整理最终回复
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1527,7 +1707,7 @@ export default function AgentConsole() {
 
               {/* Input Area */}
               <div className="shrink-0 bg-white/80 p-4 backdrop-blur dark:bg-slate-900/80">
-                <div className="mx-auto max-w-3xl">
+                <div className="mx-auto w-full max-w-[72rem]">
                   <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
                     <textarea
                       className="min-h-[44px] max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"

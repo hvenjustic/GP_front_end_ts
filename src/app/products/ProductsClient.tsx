@@ -77,7 +77,7 @@ export default function ProductsClient() {
 
   return (
     <div className="relative isolate px-6 pb-16">
-      <section className="mx-auto mt-8 max-w-[108rem] overflow-hidden rounded-3xl border border-white/60 bg-white/80 p-8 shadow-lg backdrop-blur md:p-12 dark:border-white/10 dark:bg-slate-900/80">
+      <section className="mx-auto mt-4 max-w-[108rem] overflow-hidden rounded-3xl border border-white/60 bg-white/80 p-8 shadow-lg backdrop-blur md:p-12 dark:border-white/10 dark:bg-slate-900/80">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-4">
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
@@ -140,7 +140,7 @@ export default function ProductsClient() {
         </div>
       </section>
 
-      <section className="mx-auto mt-10 max-w-[108rem]">
+      <section className="mx-auto mt-6 max-w-[108rem]">
         <div id="catalog">
           <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/80 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
