@@ -319,7 +319,7 @@ export default function ProductGraph({ id, onBack, isEmbedded = false }: Product
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
         <div className="flex items-center gap-2">
              <FiLayers className="text-indigo-500" />
-             <span className="font-semibold text-slate-700 dark:text-slate-200">知识图谱探索器</span>
+             <span className="font-semibold text-slate-700 dark:text-slate-200">图谱预览</span>
         </div>
         <div className="flex items-center gap-2">
             <button

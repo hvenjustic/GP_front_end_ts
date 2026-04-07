@@ -138,12 +138,6 @@ const executionTimeline = [
   { label: '构建资源盘点', status: '待机', detail: '等待计算可构建站点数量', time: '刚刚', tone: 'slate' }
 ];
 
-const automations = [
-  { title: '库存巡检与自动上架', status: '监控中', owner: '运营 Agent', steps: ['读取库存节点', '触发补货工单', '库存恢复自动上架'] },
-  { title: '智能调价与关联推荐', status: '试运行', owner: '定价 Agent', steps: ['竞品比价', '生成加购/替代推荐', '等待确认执行'] },
-  { title: '客服对话助手', status: '活跃', owner: '对话 Agent', steps: ['意图识别', '知识检索', '多轮回复草稿'] }
-];
-
 const toneColor: Record<string, string> = {
   emerald: 'text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30',
   indigo: 'text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30',
@@ -1177,7 +1171,7 @@ export default function AgentConsole() {
             </Card>
           </div>
 
-          {/* 待办与编排 */}
+          {/* 审核待办 */}
           <div className="space-y-4 overflow-y-auto pr-1 md:col-span-1">
             <Card>
               <div className="mb-3 flex items-center justify-between">
@@ -1294,37 +1288,6 @@ export default function AgentConsole() {
                     </div>
                   );
                 })}
-              </div>
-            </Card>
-
-            <Card>
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-                <FiActivity className="h-4 w-4 text-indigo-500" />
-                运营编排
-              </div>
-              <div className="space-y-3">
-                {automations.map((flow) => (
-                  <div key={flow.title} className="rounded-xl border border-slate-200/70 p-3 dark:border-slate-800/70">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{flow.title}</p>
-                      <span className="rounded-full bg-indigo-100 px-3 py-1 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-200">
-                        {flow.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Owner: {flow.owner}</p>
-                    <ul className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-200">
-                      {flow.steps.map((step) => (
-                        <li key={step} className="flex items-start gap-2">
-                          <span className="mt-1 h-2 w-2 rounded-full bg-indigo-500" />
-                          {step}
-                        </li>
-                      ))}
-                    </ul>
-                    <button className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600">
-                      触发一次
-                    </button>
-                  </div>
-                ))}
               </div>
             </Card>
           </div>
