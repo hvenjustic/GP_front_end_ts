@@ -134,7 +134,7 @@ type StreamTrace = {
 const executionTimeline = [
   { label: '爬取队列巡检', status: '待机', detail: '等待新的爬取任务进入队列', time: '刚刚', tone: 'slate' },
   { label: '图谱构建巡检', status: '待机', detail: '等待新的构建任务进入队列', time: '刚刚', tone: 'slate' },
-  { label: '上架审核巡检', status: '待机', detail: '等待新的图谱进入审核流程', time: '刚刚', tone: 'slate' },
+  { label: '结果复核巡检', status: '待机', detail: '等待新的产品图谱进入复核流程', time: '刚刚', tone: 'slate' },
   { label: '构建资源盘点', status: '待机', detail: '等待计算可构建站点数量', time: '刚刚', tone: 'slate' }
 ];
 
@@ -644,7 +644,7 @@ export default function AgentConsole() {
     if (results[2].status === 'fulfilled') {
       setOnSaleTotal(results[2].value);
     } else {
-      errors.push(`上架进度获取失败：${results[2].reason instanceof Error ? results[2].reason.message : '未知错误'}`);
+      errors.push(`产品同步进度获取失败：${results[2].reason instanceof Error ? results[2].reason.message : '未知错误'}`);
     }
 
     if (results[3].status === 'fulfilled') {
@@ -705,14 +705,14 @@ export default function AgentConsole() {
       tone: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-200'
     },
     {
-      label: '上架进度',
+      label: '产品同步',
       value: formatMetricValue(onSaleTotal),
       hint:
         onSaleTotal === null
-          ? '等待同步商品状态'
+          ? '等待同步产品状态'
           : reviewTotal > 0
-            ? `已上架商品 ${onSaleTotal} 个，待审核 ${reviewTotal} 个`
-            : `已上架商品 ${onSaleTotal} 个`,
+            ? `已同步产品 ${onSaleTotal} 个，待复核 ${reviewTotal} 个`
+            : `已同步产品 ${onSaleTotal} 个`,
       icon: FiPackage,
       tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200'
     },
@@ -932,7 +932,7 @@ export default function AgentConsole() {
     if (reviewSubmittingAction) return;
     const normalizedIds = [...new Set(ids.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0))];
     if (!normalizedIds.length) {
-      setReviewError('请先选择待审核图谱');
+      setReviewError('请先选择待复核图谱');
       return;
     }
     setReviewSubmittingAction(action);
@@ -1171,16 +1171,16 @@ export default function AgentConsole() {
             </Card>
           </div>
 
-          {/* 审核待办 */}
+          {/* 复核待办 */}
           <div className="space-y-4 overflow-y-auto pr-1 md:col-span-1">
             <Card>
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
                   <FiAlertTriangle className="h-4 w-4 text-amber-500" />
-                  审核待办
+                  复核待办
                 </div>
                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/30 dark:text-amber-100">
-                  待审核 {reviewTotal}
+                  待复核 {reviewTotal}
                 </span>
               </div>
               <div className="mb-3 flex flex-wrap gap-2">
@@ -1213,14 +1213,14 @@ export default function AgentConsole() {
                   disabled={selectedReviewIds.length === 0 || reviewSubmittingAction !== null}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {reviewSubmittingAction === 'approve' ? '批准中...' : `批准选中 ${selectedReviewIds.length}`}
+                  {reviewSubmittingAction === 'approve' ? '通过中...' : `通过选中 ${selectedReviewIds.length}`}
                 </button>
                 <button
                   onClick={() => handleBatchReview('reject')}
                   disabled={selectedReviewIds.length === 0 || reviewSubmittingAction !== null}
                   className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {reviewSubmittingAction === 'reject' ? '拒绝中...' : `拒绝选中 ${selectedReviewIds.length}`}
+                  {reviewSubmittingAction === 'reject' ? '退回中...' : `退回选中 ${selectedReviewIds.length}`}
                 </button>
               </div>
               <div className="space-y-3">
@@ -1236,11 +1236,11 @@ export default function AgentConsole() {
                 )}
                 {!reviewLoading && !reviewError && reviewItems.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-200 p-3 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
-                    暂无待审核图谱
+                    暂无待复核图谱
                   </div>
                 )}
                 {reviewItems.map((item) => {
-                  const title = item.name || item.site_name || '待审核图谱';
+                  const title = item.name || item.site_name || '待复核图谱';
                   const updatedLabel = formatTime(item.graph_built_at || item.updated_at);
                   const isChecked = selectedReviewIdSet.has(item.id);
                   const isSubmitting = reviewSubmittingAction !== null;
@@ -1266,7 +1266,7 @@ export default function AgentConsole() {
                       <div className="mt-2 flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
                           <FiClock className="h-4 w-4" />
-                          待审核
+                          待复核
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -1274,14 +1274,14 @@ export default function AgentConsole() {
                             disabled={isSubmitting}
                             className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200"
                           >
-                            拒绝
+                            退回
                           </button>
                           <button
                             onClick={() => handleSingleReview(item.id, 'approve')}
                             disabled={isSubmitting}
                             className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
                           >
-                            批准
+                            通过
                           </button>
                         </div>
                       </div>

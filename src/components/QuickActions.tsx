@@ -5,21 +5,21 @@ import { FiArrowUpRight, FiCompass, FiDatabase, FiZap } from 'react-icons/fi';
 
 const quickActions = [
   {
-    title: '接通图谱与商品接口',
-    body: '将 /api/agent 与 /api/products 请求连到后端或 mock 服务，替换示例数据。',
-    cta: '对接接口',
+    title: '固定演示样站',
+    body: '选定 3 到 5 个企业官网作为答辩样本，提前跑通重爬、建图和查询流程。',
+    cta: '整理样本',
     icon: FiDatabase
   },
   {
-    title: '导入知识图谱',
-    body: '准备品牌、品类、属性的节点和关系，填充推荐与问答可引用的数据源。',
-    cta: '加载节点',
+    title: '校对抽取结果',
+    body: '针对产品、组织、工艺等重点实体抽样核对，形成论文中的实验与误差分析素材。',
+    cta: '抽样复核',
     icon: FiCompass
   },
   {
-    title: '上线体验版',
-    body: '配置域名与部署流水线，保留 Agent 面板与聊天入口，便于演示毕业设计。',
-    cta: '准备部署',
+    title: '补齐展示材料',
+    body: '准备 README、系统流程图、接口说明和演示截图，把项目收束成可答辩版本。',
+    cta: '整理文档',
     icon: FiZap
   }
 ];

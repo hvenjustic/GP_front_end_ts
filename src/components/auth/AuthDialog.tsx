@@ -167,12 +167,12 @@ export default function AuthDialog({ open, onClose, onSuccess }: AuthDialogProps
       <div className="relative z-10 w-full max-w-md overflow-hidden rounded-3xl border border-white/60 bg-white/95 shadow-2xl dark:border-slate-700 dark:bg-slate-950/95">
         <div className="flex items-start justify-between border-b border-slate-200/80 px-6 py-5 dark:border-slate-800">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">JWT Auth</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">账号系统</p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
               {mode === 'login' ? '登录账号' : '注册账号'}
             </h2>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              登录后即可查看购物车、订单并使用积分结算图谱商品。
+              登录后可体验需要账号态的扩展功能；核心站点爬取、图谱浏览与 Agent 对话不依赖登录。
             </p>
           </div>
           <button

@@ -12,12 +12,12 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { API_BASE } from '@/config/api';
 
 const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/graph/', label: 'Graph' },
-  { href: '/products/', label: 'Products' },
+  { href: '/', label: '首页' },
+  { href: '/graph/', label: '地理分布' },
+  { href: '/products/', label: '产品实体' },
   { href: '/agent/', label: 'Agent' },
-  { href: '/result/', label: 'Result' },
-  { href: '/chat/', label: 'Chat' }
+  { href: '/result/', label: '结果列表' },
+  { href: '/chat/', label: '对话演示' }
 ];
 
 export default function Navbar() {
@@ -97,13 +97,13 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
               <Image src="/context-icon.svg" alt="Logo" width={40} height={30} className="h-9 w-auto" />
-              Context
+              企业官网图谱
             </Link>
             <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex dark:border-slate-800 dark:text-slate-300">
-              App Router
+              毕业设计
             </span>
             <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex dark:border-slate-800 dark:text-slate-300">
-              JWT Auth
+              FastAPI + Next.js
             </span>
           </div>
 

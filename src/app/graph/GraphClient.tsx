@@ -108,7 +108,7 @@ export default function GraphClient() {
           const latitude = Number(item.latitude.toFixed(6));
           return {
             id: String(item.id),
-            name: `任务 ${item.id}`,
+            name: `站点 ${item.id}`,
             coordinates: [longitude, latitude],
             longitude,
             latitude,
@@ -146,14 +146,14 @@ export default function GraphClient() {
           <div className="space-y-3">
             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200">
               <FiMapPin className="h-4 w-4" />
-              Graph
+              地理分布
             </span>
             <div className="space-y-2">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-white md:text-4xl">
-                Graph 地图：二维分布预览
+                站点地理分布预览
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-                使用 react-simple-maps 渲染世界地图，从后端读取 site_task 的经纬度，展示真实点位分布。
+                使用 react-simple-maps 渲染世界地图，从后端读取站点的 `geo_location` 信息，展示企业官网样本的真实分布。
               </p>
             </div>
           </div>

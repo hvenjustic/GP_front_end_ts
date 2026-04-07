@@ -20,7 +20,7 @@ body {
   margin: 0;
   color: var(--foreground);
   background: var(--background);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   overflow-y: scroll; /* 保留滚动条空间，避免页面跳动 */
   scrollbar-gutter: stable;
 }
