@@ -9,6 +9,7 @@ import {
   FiTrendingUp,
   FiZap
 } from 'react-icons/fi';
+import HomeCommercePanel from '@/components/HomeCommercePanel';
 import QuickActions from '@/components/QuickActions';
 
 const statHighlights = [
@@ -181,6 +182,8 @@ export default function Home() {
           </Card>
         ))}
       </section>
+
+      <HomeCommercePanel />
 
       <section className="mx-auto mt-10 max-w-[108rem]" id="activity">
         <div className="mb-4 flex items-center justify-between">
