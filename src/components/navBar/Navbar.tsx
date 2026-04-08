@@ -10,6 +10,12 @@ import AuthDialog from '@/components/auth/AuthDialog';
 import { clearStoredToken, getStoredToken, subscribeAuthDialogOpen, subscribeAuthToken } from '@/components/auth/authStorage';
 import ThemeToggle from '@/components/ThemeToggle';
 import { API_BASE } from '@/config/api';
+import {
+  RESULT_LIST_LAST_HREF_EVENT,
+  RESULT_LIST_LAST_HREF_STORAGE_KEY,
+  buildResultListHref,
+  normalizeResultSort
+} from '@/app/result/resultListNavigation';
 
 const navLinks = [
   { href: '/', label: '首页' },
@@ -26,6 +32,7 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [userName, setUserName] = useState('');
+  const [resultNavHref, setResultNavHref] = useState('/result');
 
   const syncUserFromToken = async (token: string) => {
     if (!token) {
@@ -57,6 +64,42 @@ export default function Navbar() {
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    try {
+      if (normalizedPath === '/result') {
+        const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        const nextHref = buildResultListHref(
+          Math.max(1, Number(params.get('page')) || 1),
+          Math.max(1, Number(params.get('page_size')) || 10),
+          normalizeResultSort(params.get('sort'))
+        );
+        sessionStorage.setItem(RESULT_LIST_LAST_HREF_STORAGE_KEY, nextHref);
+        setResultNavHref(nextHref);
+        return;
+      }
+
+      const storedHref = sessionStorage.getItem(RESULT_LIST_LAST_HREF_STORAGE_KEY);
+      setResultNavHref(storedHref || '/result');
+    } catch {
+      setResultNavHref('/result');
+    }
+  }, [normalizedPath]);
+
+  useEffect(() => {
+    const handleResultHrefChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{ href?: string }>;
+      const href = String(customEvent.detail?.href || '').trim();
+      if (href) {
+        setResultNavHref(href);
+      }
+    };
+
+    window.addEventListener(RESULT_LIST_LAST_HREF_EVENT, handleResultHrefChanged as EventListener);
+    return () => {
+      window.removeEventListener(RESULT_LIST_LAST_HREF_EVENT, handleResultHrefChanged as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     const initialToken = getStoredToken();
@@ -110,12 +153,13 @@ export default function Navbar() {
           <div className="hidden items-center gap-6 md:flex">
             {navLinks.map((link) => {
               const normalizedHref = link.href === '/' ? '/' : link.href.replace(/\/+$/, '');
+              const resolvedHref = normalizedHref === '/result' ? resultNavHref : link.href;
               const isActive =
                 normalizedPath === normalizedHref || (normalizedHref !== '/' && normalizedPath.startsWith(normalizedHref));
               return (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  href={resolvedHref}
                   className="group relative text-sm font-semibold text-slate-700 transition hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
                 >
                   {link.label}
@@ -152,15 +196,19 @@ export default function Navbar() {
               className="md:hidden"
             >
               <div className="space-y-1 border-t border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="block rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+                {navLinks.map((link) => {
+                  const normalizedHref = link.href === '/' ? '/' : link.href.replace(/\/+$/, '');
+                  const resolvedHref = normalizedHref === '/result' ? resultNavHref : link.href;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={resolvedHref}
+                      className="block rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      {link.label}
+                    </Link>
+                  );
+                })}
                 {userName ? (
                   <div className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-200">
                     <FiUser className="h-4 w-4" />

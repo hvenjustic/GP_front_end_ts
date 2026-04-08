@@ -3,10 +3,18 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FiArrowLeft, FiArrowRight, FiDownload, FiInfo, FiPlay, FiRefreshCw } from 'react-icons/fi';
 import { API_BASE } from '@/config/api';
 import SiteDetailContent from './SiteDetailContent';
+import {
+    buildResultListHref,
+    DEFAULT_RESULT_SORT,
+    RESULT_LIST_LAST_HREF_EVENT,
+    normalizeResultSort,
+    RESULT_LIST_LAST_HREF_STORAGE_KEY,
+    type ResultSortOption,
+} from './resultListNavigation';
 import {
     canBuildGraph,
     formatDuration,
@@ -30,6 +38,20 @@ const clampInt = (value: string | null, fallback: number, min: number, max: numb
     return Math.min(max, Math.max(min, Math.floor(parsed)));
 };
 
+// 结果列表列宽比例统一在这里调整。
+const RESULT_TABLE_COLUMN_WIDTHS = {
+    select: '2%',
+    id: '6%',
+    name: '14%',
+    url: '20%',
+    status: '10%',
+    pageCount: '9%',
+    crawlDuration: '10%',
+    graphDuration: '11%',
+    processedMarkdown: '9%',
+    action: '9%',
+} as const;
+
 const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
     <div
         className={`glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70 ${className}`}
@@ -39,9 +61,11 @@ const Card = ({ children, className = '' }: { children: ReactNode; className?: s
 );
 
 export default function ResultListClient() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const page = useMemo(() => clampInt(searchParams.get('page'), 1, 1, 10_000), [searchParams]);
     const pageSize = 10;
+    const sort = useMemo(() => normalizeResultSort(searchParams.get('sort')), [searchParams]);
 
     const [data, setData] = useState<ResultListResponse | null>(null);
     const [loading, setLoading] = useState(false);
@@ -65,11 +89,16 @@ export default function ResultListClient() {
         return Math.max(1, Math.ceil((data.total || 0) / (data.page_size || pageSize)));
     }, [data, pageSize]);
 
+    const buildHref = (nextPage: number, nextSort: ResultSortOption = sort) =>
+        buildResultListHref(nextPage, pageSize, nextSort);
+
     const fetchList = async () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`${API_BASE}/api/results?page=${page}&page_size=${pageSize}`, { cache: 'no-store' });
+            const res = await fetch(`${API_BASE}/api/results?page=${page}&page_size=${pageSize}&sort=${sort}`, {
+                cache: 'no-store',
+            });
             if (!res.ok) throw new Error(`请求失败：${res.status}`);
             const json = (await res.json()) as ResultListResponse;
             setData(json);
@@ -127,7 +156,17 @@ export default function ResultListClient() {
 
     useEffect(() => {
         fetchList();
-    }, [page, pageSize]);
+    }, [page, pageSize, sort]);
+
+    useEffect(() => {
+        try {
+            const href = buildHref(page, sort);
+            sessionStorage.setItem(RESULT_LIST_LAST_HREF_STORAGE_KEY, href);
+            window.dispatchEvent(new CustomEvent(RESULT_LIST_LAST_HREF_EVENT, { detail: { href } }));
+        } catch {
+            // ignore sessionStorage write error
+        }
+    }, [page, sort]);
 
     useEffect(() => {
         if (!data?.items?.length) {
@@ -165,7 +204,9 @@ export default function ResultListClient() {
         [selectedItems],
     );
 
-    const buildHref = (nextPage: number) => `/result?page=${nextPage}&page_size=${pageSize}`;
+    const handleSortChange = (nextSort: ResultSortOption) => {
+        router.push(buildHref(1, nextSort), { scroll: false });
+    };
 
     const handleBuildGraphBatch = async () => {
         if (!selectedGraphIds.length) return;
@@ -225,9 +266,22 @@ export default function ResultListClient() {
 
     return (
         <div className="px-6 pb-16">
-            <div className="mx-auto mt-8 max-w-[108rem] space-y-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">结果列表</h1>
+            <div className="mx-auto mt-1 max-w-[108rem] space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">结果列表</h1>
+                        <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">
+                            <span className="font-medium">排序</span>
+                            <select
+                                value={sort}
+                                onChange={(event) => handleSortChange(normalizeResultSort(event.target.value))}
+                                className="bg-transparent text-sm font-semibold text-slate-900 outline-none dark:text-white"
+                            >
+                                <option value={DEFAULT_RESULT_SORT}>ID 从小到大</option>
+                                <option value="id_desc">ID 从大到小</option>
+                            </select>
+                        </label>
+                    </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleEnqueueCrawl}
@@ -288,7 +342,19 @@ export default function ResultListClient() {
                         </div>
                     )}
                     <div className="overflow-auto">
-                        <table className="min-w-full text-left text-sm">
+                        <table className="w-full table-fixed text-left text-sm">
+                            <colgroup>
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.select }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.id }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.name }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.url }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.status }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.pageCount }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.crawlDuration }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.graphDuration }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.processedMarkdown }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.action }} />
+                            </colgroup>
                             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/60 dark:text-slate-400">
                                 <tr>
                                     <th className="px-4 py-3">
@@ -326,9 +392,15 @@ export default function ResultListClient() {
                                         <td className="px-4 py-3 font-semibold text-indigo-600 dark:text-indigo-300">
                                             <Link href={`/result/detail?id=${item.id}`}>{item.id}</Link>
                                         </td>
-                                        <td className="px-4 py-3">{getSiteDisplayName(item)}</td>
-                                        <td className="px-4 py-3 max-w-[520px] truncate" title={item.url}>
-                                            {item.url}
+                                        <td className="px-4 py-3 overflow-hidden">
+                                            <div className="w-full overflow-hidden text-ellipsis whitespace-nowrap" title={getSiteDisplayName(item)}>
+                                                {getSiteDisplayName(item)}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 overflow-hidden" title={item.url}>
+                                            <div className="w-full overflow-hidden text-ellipsis whitespace-nowrap">
+                                                {item.url}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3">{formatStatus(item.status)}</td>
                                         <td className="px-4 py-3">{item.page_count ?? 0}</td>

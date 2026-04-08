@@ -1144,7 +1144,7 @@ export default function AgentConsole() {
     const isCollapsed = Boolean(collapsedTracePanels[panelKey]);
 
     return (
-      <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/70">
+      <div className="min-w-0 rounded-2xl border border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/70">
         <button
           type="button"
           onClick={() =>
@@ -1185,7 +1185,7 @@ export default function AgentConsole() {
                 return (
                   <div
                     key={`trace-${traceIdx}-${trace.step}`}
-                    className={`rounded-2xl border px-4 py-3 ${traceToneClassName(trace)}`}
+                    className={`min-w-0 rounded-2xl border px-4 py-3 ${traceToneClassName(trace)}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -1197,7 +1197,9 @@ export default function AgentConsole() {
                     </div>
                     {detail ? (
                       <div
-                        className={`opacity-80 ${isCompactTrace ? 'mt-1 text-[13px] leading-5' : 'mt-2 text-sm leading-6'}`}
+                        className={`break-words whitespace-pre-wrap [overflow-wrap:anywhere] opacity-80 ${
+                          isCompactTrace ? 'mt-1 text-[13px] leading-5' : 'mt-2 text-sm leading-6'
+                        }`}
                       >
                         {detail}
                       </div>
@@ -1468,7 +1470,7 @@ export default function AgentConsole() {
           </div>
 
           {/* 聊天交互（占 1/2，右侧全高） */}
-          <div className="flex min-h-0 w-full">
+          <div className="flex min-h-0 min-w-0 w-full">
             <Card className="relative h-full w-full !p-0 overflow-hidden flex flex-col bg-gradient-to-b from-sky-50 to-white shadow-xl border-none">
               {historyOpen && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
@@ -1585,8 +1587,8 @@ export default function AgentConsole() {
               </div>
 
               {/* Chat Messages Area */}
-              <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
-                <div className="mx-auto w-full max-w-[72rem] space-y-8">
+              <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+                <div className="mx-auto min-w-0 w-full max-w-[72rem] space-y-8">
                   {messages.map((msg, idx) => {
                     const messageKey = `${msg.role}-${idx}`;
                     const isCopied = copiedMessageKey === messageKey;
@@ -1625,7 +1627,7 @@ export default function AgentConsole() {
                     return (
                       <div
                         key={messageKey}
-                        className="group w-full border-b border-slate-200/70 pb-8 last:border-b-0 dark:border-slate-800/80"
+                        className="group min-w-0 w-full border-b border-slate-200/70 pb-8 last:border-b-0 dark:border-slate-800/80"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -1646,10 +1648,10 @@ export default function AgentConsole() {
                           </button>
                         </div>
 
-                        <div className="mt-3 space-y-4">
+                        <div className="mt-3 min-w-0 space-y-4">
                           {renderTracePanel(msg.traces || [], '工具执行过程', `${messageKey}-trace`)}
 
-                          <div className="min-h-[1.5rem] text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                          <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
                             <AgentMarkdown content={msg.text} />
                           </div>
 
@@ -1672,7 +1674,7 @@ export default function AgentConsole() {
 
                   {/* Streaming State */}
                   {isStreaming && (
-                    <div className="w-full border-b border-slate-200/70 pb-8 dark:border-slate-800/80">
+                    <div className="min-w-0 w-full border-b border-slate-200/70 pb-8 dark:border-slate-800/80">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
                           Agent
@@ -1683,10 +1685,10 @@ export default function AgentConsole() {
                         </div>
                       </div>
 
-                      <div className="mt-3 space-y-4">
+                      <div className="mt-3 min-w-0 space-y-4">
                         {renderTracePanel(streamTraces, '工具执行过程', 'streaming-trace', true)}
 
-                        <div className="min-h-[1.5rem] text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                        <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
                           {streamBuffer ? (
                             <AgentMarkdown content={streamBuffer} />
                           ) : (
