@@ -483,17 +483,6 @@ export default function Navbar() {
             <div className="mt-3 space-y-2">
               <button
                 type="button"
-                onClick={() => openWalletModal('balance')}
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <FiCreditCard className="h-4 w-4 text-sky-500" />
-                  积分余额
-                </span>
-                <FiArrowUpRight className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
                 onClick={() => openWalletModal('recharge')}
                 className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900"
               >
@@ -644,13 +633,6 @@ export default function Navbar() {
                     </div>
 
                     <div className="mt-4 grid gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openWalletModal('balance')}
-                        className="rounded-xl border border-white/70 bg-white/80 px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
-                      >
-                        积分余额
-                      </button>
                       <button
                         type="button"
                         onClick={() => openWalletModal('recharge')}
