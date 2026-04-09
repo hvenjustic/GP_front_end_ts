@@ -644,10 +644,6 @@ export default function AgentConsole() {
     };
   }, []);
 
-  useEffect(() => {
-    fetchReviewItems();
-  }, []);
-
   const formatTime = (value?: string | null) => {
     if (!value) return '—';
     const date = new Date(value);
@@ -753,8 +749,10 @@ export default function AgentConsole() {
 
   useEffect(() => {
     void refreshExecutionProgress();
+    void fetchReviewItems();
     progressPollingRef.current = window.setInterval(() => {
       void refreshExecutionProgress();
+      void fetchReviewItems();
     }, 60000);
 
     return () => {
