@@ -133,12 +133,12 @@ export default function ProductsClient() {
       const order = await buyNow(product.id, 1);
       updateFeedback(product.id, {
         tone: 'success',
-        text: `立即购买成功，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`,
+        text: `立即结算成功，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`,
       });
     } catch (requestError) {
       updateFeedback(product.id, {
         tone: authToken ? 'error' : 'info',
-        text: requestError instanceof Error ? requestError.message : '立即购买失败',
+        text: requestError instanceof Error ? requestError.message : '立即结算失败',
       });
     } finally {
       updateActionState(product.id);
@@ -314,118 +314,94 @@ export default function ProductsClient() {
                           <FiArrowUpRight className="h-4 w-4" />
                         </Link>
 
-                        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                          <span>{expanded ? '收起图谱' : '展开图谱'}</span>
-                          <FiChevronDown
-                            className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-                          />
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleAddCart(product);
+                            }}
+                            disabled={Boolean(pendingAction)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:border-slate-600"
+                          >
+                            <FiShoppingCart className="h-4 w-4" />
+                            {pendingAction === 'cart' ? '加入中...' : '加入购物车'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleBuyNow(product);
+                            }}
+                            disabled={Boolean(pendingAction)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <FiZap className="h-4 w-4" />
+                            {pendingAction === 'buy' ? '结算中...' : '立即结算'}
+                          </button>
+                          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <span>{expanded ? '收起图谱' : '展开图谱'}</span>
+                            <FiChevronDown
+                              className={`h-5 w-5 text-slate-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+                            />
+                          </div>
                         </div>
                       </div>
+
+                      <div className="flex flex-wrap items-center gap-3 text-sm">
+                        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+                          {isLoggedIn ? (
+                            <>
+                              <FiCheckCircle className="h-4 w-4 text-emerald-500" />
+                              已登录，可直接加入购物车或立即结算
+                            </>
+                          ) : (
+                            <>
+                              <FiLock className="h-4 w-4 text-slate-500" />
+                              登录后才可购买
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openAuthDialog();
+                                }}
+                                className="inline-flex items-center gap-1 font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                              >
+                                去登录
+                                <FiArrowUpRight className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <Link
+                          href="/chat/"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                        >
+                          前往购物车页
+                          <FiArrowUpRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+
+                      {feedback ? (
+                        <div
+                          className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${actionToneClassName[feedback.tone]}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {feedback.tone === 'success' ? (
+                              <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                            ) : (
+                              <FiAlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                            )}
+                            <span>{feedback.text}</span>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     {expanded && (
                       <div className="border-t border-slate-100 p-5 dark:border-slate-800">
-                        <div className="grid gap-5 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
-                          <aside className="flex h-full flex-col gap-4 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950/20">
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                                购买面板
-                              </p>
-                              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                                {product.price_points.toLocaleString()} 积分
-                              </h3>
-                              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                                购买后可在对话展示页查看购物车，或直接完成当前单品下单。
-                              </p>
-                            </div>
-
-                            <div className="grid gap-3">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleAddCart(product);
-                                }}
-                                disabled={Boolean(pendingAction)}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:border-slate-600"
-                              >
-                                <FiShoppingCart className="h-4 w-4" />
-                                {pendingAction === 'cart' ? '加入中...' : '加入购物车'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleBuyNow(product);
-                                }}
-                                disabled={Boolean(pendingAction)}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                <FiZap className="h-4 w-4" />
-                                {pendingAction === 'buy' ? '下单中...' : '立即购买'}
-                              </button>
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
-                              <div className="flex items-start gap-2">
-                                {isLoggedIn ? (
-                                  <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                                ) : (
-                                  <FiLock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-                                )}
-                                <div>
-                                  <p className="font-semibold text-slate-900 dark:text-white">
-                                    {isLoggedIn ? '已登录，可直接购买' : '需要登录后购买'}
-                                  </p>
-                                  <p className="mt-1 leading-6">
-                                    {isLoggedIn ? '当前账号已具备购物车和积分下单能力。' : '点击按钮会自动弹出登录框，登录后可继续操作。'}
-                                  </p>
-                                  {!isLoggedIn ? (
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openAuthDialog();
-                                      }}
-                                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
-                                    >
-                                      立即登录
-                                      <FiArrowUpRight className="h-3.5 w-3.5" />
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-
-                            {feedback ? (
-                              <div
-                                className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${actionToneClassName[feedback.tone]}`}
-                              >
-                                <div className="flex items-start gap-2">
-                                  {feedback.tone === 'success' ? (
-                                    <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                                  ) : (
-                                    <FiAlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                                  )}
-                                  <span>{feedback.text}</span>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            <Link
-                              href="/chat/"
-                              onClick={(event) => event.stopPropagation()}
-                              className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
-                            >
-                              前往对话展示页查看购物车
-                              <FiArrowUpRight className="h-4 w-4" />
-                            </Link>
-                          </aside>
-
-                          <div className="min-w-0">
-                            <ProductGraph id={String(product.source_site_id)} isEmbedded={true} />
-                          </div>
-                        </div>
+                        <ProductGraph id={String(product.source_site_id)} isEmbedded={true} />
                       </div>
                     )}
                   </div>

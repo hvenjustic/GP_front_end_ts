@@ -182,20 +182,34 @@ const MarkdownMessage = ({ content }: { content: string }) => (
 
 const CartRow = ({
   item,
+  checked,
   removing,
+  onToggle,
   onRemove,
 }: {
   item: CartItem;
+  checked: boolean;
   removing: boolean;
+  onToggle: () => void;
   onRemove: () => void;
 }) => (
   <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{item.product_name}</p>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {item.product_url || '无来源地址'}
-        </p>
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <label className="mt-1 inline-flex cursor-pointer items-center">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onToggle}
+            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900"
+          />
+        </label>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{item.product_name}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {item.product_url || '无来源地址'}
+          </p>
+        </div>
       </div>
       <button
         type="button"
@@ -228,6 +242,7 @@ const CartRow = ({
 export default function ChatClient() {
   const [authToken, setAuthToken] = useState('');
   const [cart, setCart] = useState<CartResponse | null>(null);
+  const [selectedCartItemIds, setSelectedCartItemIds] = useState<number[]>([]);
   const [cartLoading, setCartLoading] = useState(false);
   const [cartError, setCartError] = useState('');
   const [cartFeedback, setCartFeedback] = useState('');
@@ -242,10 +257,25 @@ export default function ChatClient() {
   const streamBufferRef = useRef('');
   const streamTracesRef = useRef<TraceItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const previousCartItemIdsRef = useRef<number[]>([]);
 
   const totalItems = cart?.total_items || 0;
   const totalPoints = cart?.total_points || 0;
   const pointsBalance = cart?.user.points_balance ?? null;
+  const selectedItems = useMemo(() => {
+    const selectedIdSet = new Set(selectedCartItemIds);
+    return (cart?.items || []).filter((item) => selectedIdSet.has(item.id));
+  }, [cart?.items, selectedCartItemIds]);
+  const selectedItemCount = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    [selectedItems]
+  );
+  const selectedTotalPoints = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + Number(item.subtotal_points || 0), 0),
+    [selectedItems]
+  );
+  const cartLineCount = cart?.items.length || 0;
+  const allSelected = cartLineCount > 0 && selectedItems.length === cartLineCount;
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
 
   const scrollToBottom = () => {
@@ -297,12 +327,30 @@ export default function ChatClient() {
   useEffect(() => {
     if (!authToken.trim()) {
       setCart(null);
+      setSelectedCartItemIds([]);
+      previousCartItemIdsRef.current = [];
       setCartError('');
       setCartFeedback('');
       return;
     }
     void loadCart();
   }, [authToken]);
+
+  useEffect(() => {
+    const currentItemIds = (cart?.items || []).map((item) => item.id);
+    setSelectedCartItemIds((prev) => {
+      if (!currentItemIds.length) {
+        return [];
+      }
+      if (!previousCartItemIdsRef.current.length) {
+        return currentItemIds;
+      }
+      const prevSelected = new Set(prev);
+      const previousIds = new Set(previousCartItemIdsRef.current);
+      return currentItemIds.filter((id) => prevSelected.has(id) || !previousIds.has(id));
+    });
+    previousCartItemIdsRef.current = currentItemIds;
+  }, [cart?.items]);
 
   useEffect(() => {
     scrollToBottom();
@@ -421,19 +469,39 @@ export default function ChatClient() {
   };
 
   const handleCheckout = async () => {
-    if (!cart?.items.length) return;
+    if (!selectedCartItemIds.length) return;
     setCartSubmitting('checkout');
     setCartError('');
     setCartFeedback('');
     try {
-      const order = await checkoutCart();
-      setCartFeedback(`结算成功，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`);
+      const order = await checkoutCart(selectedCartItemIds);
+      setCartFeedback(`已结算 ${order.item_count} 项图谱，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`);
       await loadCart({ silent: true });
     } catch (requestError) {
       setCartError(requestError instanceof Error ? requestError.message : '结算失败');
     } finally {
       setCartSubmitting('');
     }
+  };
+
+  const toggleCartSelection = (itemId: number) => {
+    setSelectedCartItemIds((prev) => {
+      const selected = new Set(prev);
+      if (selected.has(itemId)) {
+        selected.delete(itemId);
+      } else {
+        selected.add(itemId);
+      }
+      return (cart?.items || []).map((item) => item.id).filter((id) => selected.has(id));
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedCartItemIds([]);
+      return;
+    }
+    setSelectedCartItemIds((cart?.items || []).map((item) => item.id));
   };
 
   return (
@@ -458,7 +526,7 @@ export default function ChatClient() {
                     <FiShoppingCart className="h-4 w-4 text-emerald-500" />
                     购物车
                   </div>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">左侧列表可滚动，支持删除单项和整车结算。</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">左侧列表可滚动，支持多选图谱、删除单项和按勾选项结算。</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -556,11 +624,27 @@ export default function ChatClient() {
 
               {authToken.trim() && totalItems > 0 ? (
                 <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/60">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900"
+                      />
+                      全选
+                    </label>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      已选 {selectedItems.length} 项，合计 {selectedTotalPoints} 积分
+                    </div>
+                  </div>
                   {(cart?.items || []).map((item) => (
                     <CartRow
                       key={item.id}
                       item={item}
+                      checked={selectedCartItemIds.includes(item.id)}
                       removing={cartSubmitting === `remove-${item.id}`}
+                      onToggle={() => toggleCartSelection(item.id)}
                       onRemove={() => void handleRemoveCartItem(item)}
                     />
                   ))}
@@ -572,16 +656,17 @@ export default function ChatClient() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">当前结算</p>
-                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{totalPoints} 积分</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{selectedTotalPoints} 积分</div>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">已勾选 {selectedItems.length} 项商品，合计数量 {selectedItemCount}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleCheckout()}
-                  disabled={!authToken.trim() || totalItems === 0 || cartSubmitting === 'checkout'}
+                  disabled={!authToken.trim() || selectedItems.length === 0 || cartSubmitting === 'checkout'}
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <FiCheckCircle className="h-4 w-4" />
-                  {cartSubmitting === 'checkout' ? '结算中...' : '结算全部商品'}
+                  {cartSubmitting === 'checkout' ? '结算中...' : '结算已选商品'}
                 </button>
               </div>
             </div>

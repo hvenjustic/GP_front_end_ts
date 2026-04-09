@@ -150,12 +150,14 @@ export const removeCartItem = (itemId: number) =>
     method: 'DELETE',
   }, { emitCartChanged: true });
 
-export const checkoutCart = () =>
+export const checkoutCart = (cartItemIds?: number[]) =>
   authJsonRequest<OrderResponse>(
     '/api/orders/checkout',
     {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        cart_item_ids: Array.isArray(cartItemIds) && cartItemIds.length > 0 ? cartItemIds : undefined,
+      }),
     },
     { emitCartChanged: true }
   );
