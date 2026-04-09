@@ -3,16 +3,23 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FiAlertCircle,
   FiArrowUpRight,
+  FiCheckCircle,
   FiChevronDown,
   FiDatabase,
   FiGitBranch,
   FiGlobe,
   FiLayers,
+  FiLock,
   FiRefreshCw,
   FiSearch,
+  FiShoppingCart,
+  FiZap,
 } from 'react-icons/fi';
+import { getStoredToken, openAuthDialog, subscribeAuthToken } from '@/components/auth/authStorage';
 import { API_BASE } from '@/config/api';
+import { addCartItem, buyNow } from '@/lib/shopApi';
 import ProductGraph from './ProductGraph';
 
 type ProductItem = {
@@ -32,12 +39,26 @@ type ProductListResponse = {
   page_size: number;
 };
 
+type ProductActionState = {
+  tone: 'success' | 'error' | 'info';
+  text: string;
+};
+
+const actionToneClassName: Record<ProductActionState['tone'], string> = {
+  success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200',
+  error: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200',
+  info: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200',
+};
+
 export default function ProductsClient() {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [pendingActions, setPendingActions] = useState<Record<number, 'cart' | 'buy' | undefined>>({});
+  const [productFeedback, setProductFeedback] = useState<Record<number, ProductActionState | undefined>>({});
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -59,6 +80,11 @@ export default function ProductsClient() {
     void fetchProducts();
   }, []);
 
+  useEffect(() => {
+    setAuthToken(getStoredToken());
+    return subscribeAuthToken((token) => setAuthToken(token));
+  }, []);
+
   const filteredProducts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return products;
@@ -74,6 +100,50 @@ export default function ProductsClient() {
     () => products.reduce((sum, item) => sum + Number(item.relation_count || 0), 0),
     [products]
   );
+
+  const updateActionState = (productId: number, action?: 'cart' | 'buy') => {
+    setPendingActions((prev) => ({ ...prev, [productId]: action }));
+  };
+
+  const updateFeedback = (productId: number, feedback: ProductActionState) => {
+    setProductFeedback((prev) => ({ ...prev, [productId]: feedback }));
+  };
+
+  const handleAddCart = async (product: ProductItem) => {
+    updateActionState(product.id, 'cart');
+    try {
+      const cart = await addCartItem(product.id, 1);
+      updateFeedback(product.id, {
+        tone: 'success',
+        text: `已加入购物车。当前购物车共 ${cart.total_items} 件商品，合计 ${cart.total_points} 积分。`,
+      });
+    } catch (requestError) {
+      updateFeedback(product.id, {
+        tone: authToken ? 'error' : 'info',
+        text: requestError instanceof Error ? requestError.message : '加入购物车失败',
+      });
+    } finally {
+      updateActionState(product.id);
+    }
+  };
+
+  const handleBuyNow = async (product: ProductItem) => {
+    updateActionState(product.id, 'buy');
+    try {
+      const order = await buyNow(product.id, 1);
+      updateFeedback(product.id, {
+        tone: 'success',
+        text: `立即购买成功，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`,
+      });
+    } catch (requestError) {
+      updateFeedback(product.id, {
+        tone: authToken ? 'error' : 'info',
+        text: requestError instanceof Error ? requestError.message : '立即购买失败',
+      });
+    } finally {
+      updateActionState(product.id);
+    }
+  };
 
   return (
     <div className="relative isolate px-6 pb-16">
@@ -171,6 +241,9 @@ export default function ProductsClient() {
             <div className="mt-4 flex flex-col gap-4">
               {filteredProducts.map((product) => {
                 const expanded = expandedProductId === product.id;
+                const feedback = productFeedback[product.id];
+                const pendingAction = pendingActions[product.id];
+                const isLoggedIn = Boolean(authToken.trim());
                 return (
                   <div
                     key={product.id}
@@ -191,7 +264,7 @@ export default function ProductsClient() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-[34rem]">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 xl:min-w-[43rem]">
                           <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-900/20">
                             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
                               <FiGlobe className="h-3.5 w-3.5" />
@@ -199,6 +272,15 @@ export default function ProductsClient() {
                             </div>
                             <p className="mt-2 text-base font-semibold text-slate-900 dark:text-white">
                               #{product.source_site_id}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-900/20">
+                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
+                              <FiZap className="h-3.5 w-3.5" />
+                              价格
+                            </div>
+                            <p className="mt-2 text-base font-semibold text-slate-900 dark:text-white">
+                              {product.price_points.toLocaleString()} 积分
                             </p>
                           </div>
                           <div className="rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-900/50 dark:bg-sky-900/20">
@@ -243,7 +325,107 @@ export default function ProductsClient() {
 
                     {expanded && (
                       <div className="border-t border-slate-100 p-5 dark:border-slate-800">
-                        <ProductGraph id={String(product.source_site_id)} isEmbedded={true} />
+                        <div className="grid gap-5 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
+                          <aside className="flex h-full flex-col gap-4 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-amber-50 via-white to-emerald-50 p-5 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950/20">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                购买面板
+                              </p>
+                              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                                {product.price_points.toLocaleString()} 积分
+                              </h3>
+                              <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                购买后可在对话展示页查看购物车，或直接完成当前单品下单。
+                              </p>
+                            </div>
+
+                            <div className="grid gap-3">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleAddCart(product);
+                                }}
+                                disabled={Boolean(pendingAction)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:border-slate-600"
+                              >
+                                <FiShoppingCart className="h-4 w-4" />
+                                {pendingAction === 'cart' ? '加入中...' : '加入购物车'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleBuyNow(product);
+                                }}
+                                disabled={Boolean(pendingAction)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <FiZap className="h-4 w-4" />
+                                {pendingAction === 'buy' ? '下单中...' : '立即购买'}
+                              </button>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
+                              <div className="flex items-start gap-2">
+                                {isLoggedIn ? (
+                                  <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                ) : (
+                                  <FiLock className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                                )}
+                                <div>
+                                  <p className="font-semibold text-slate-900 dark:text-white">
+                                    {isLoggedIn ? '已登录，可直接购买' : '需要登录后购买'}
+                                  </p>
+                                  <p className="mt-1 leading-6">
+                                    {isLoggedIn ? '当前账号已具备购物车和积分下单能力。' : '点击按钮会自动弹出登录框，登录后可继续操作。'}
+                                  </p>
+                                  {!isLoggedIn ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openAuthDialog();
+                                      }}
+                                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
+                                    >
+                                      立即登录
+                                      <FiArrowUpRight className="h-3.5 w-3.5" />
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+
+                            {feedback ? (
+                              <div
+                                className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${actionToneClassName[feedback.tone]}`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  {feedback.tone === 'success' ? (
+                                    <FiCheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                  ) : (
+                                    <FiAlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                  )}
+                                  <span>{feedback.text}</span>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <Link
+                              href="/chat/"
+                              onClick={(event) => event.stopPropagation()}
+                              className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                            >
+                              前往对话展示页查看购物车
+                              <FiArrowUpRight className="h-4 w-4" />
+                            </Link>
+                          </aside>
+
+                          <div className="min-w-0">
+                            <ProductGraph id={String(product.source_site_id)} isEmbedded={true} />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
