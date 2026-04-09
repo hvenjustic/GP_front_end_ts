@@ -449,7 +449,7 @@ export default function ChatClient() {
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-2 gap-4 lg:grid-cols-2 lg:grid-rows-1">
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-2 gap-4 sm:grid-cols-2 sm:grid-rows-1">
           <div className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
             <div className="shrink-0 border-b border-slate-200/80 px-5 py-4 dark:border-slate-800">
               <div className="flex items-center justify-between gap-3">

@@ -1,7 +1,7 @@
 # 前端（GP_front_end_ts）
 
 ## 项目说明
-本项目为“企业官网知识图谱自动构建与分析平台”的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供站点结果查看、图谱可视化、地理分布和 Agent 对话能力。
+本项目为“生物制造知识图谱自动构建与分析平台”的前端界面，基于 Next.js（App Router）+ TailwindCSS，提供站点结果查看、图谱可视化、地理分布和 Agent 对话能力。
 
 ## 当前已实现功能
 - 首页项目总览与演示入口

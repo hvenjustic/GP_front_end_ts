@@ -4,7 +4,7 @@ import Navbar from '@/components/navBar/Navbar';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '企业官网知识图谱平台',
+  title: '生物制造知识图谱平台',
   description: '面向企业官网的知识图谱自动构建、查询分析与 Agent 演示平台。',
   icons: {
     icon: '/context-icon.svg'

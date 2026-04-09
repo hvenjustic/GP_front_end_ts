@@ -121,7 +121,7 @@ export default function Home() {
             </div>
             <div className="space-y-3">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-white md:text-4xl">
-                企业官网知识图谱自动构建与分析平台。
+                生物制造知识图谱自动构建与分析平台。
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
                 这是毕业设计的前端展示层，围绕企业官网采集、图谱抽取、图谱可视化、地理分布和 Agent 对话构建完整演示链路。
