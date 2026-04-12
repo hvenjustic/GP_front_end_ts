@@ -39,7 +39,6 @@ export default function SiteDetailContent({ item, onOpenGraph }: SiteDetailConte
 
     const fields: DetailField[] = [
         { label: 'id', value: item.id },
-        { label: 'name', value: item.name?.trim() || '—' },
         { label: 'site_name', value: item.site_name?.trim() || '—' },
         { label: 'url', value: item.url || '—' },
         { label: 'status', value: formatStatus(item.status) },

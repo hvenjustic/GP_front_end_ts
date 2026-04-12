@@ -10,6 +10,7 @@ import {
   FiClock,
   FiCopy,
   FiDatabase,
+  FiGitBranch,
   FiMessageCircle,
   FiPackage,
   FiRefreshCw,
@@ -20,6 +21,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { getStoredToken, openAuthDialog, subscribeAuthToken } from '@/components/auth/authStorage';
 import { AGENT_API_BASE } from '@/config/api';
+import ProductGraph from '@/app/products/ProductGraph';
 
 type ChatMessage = {
   role: 'user' | 'agent';
@@ -63,9 +65,10 @@ type AgentSessionDetailResponse = {
 
 type ReviewItem = {
   id: number;
-  name?: string | null;
   site_name?: string | null;
   url: string;
+  entity_count: number;
+  relation_count: number;
   graph_built_at?: string | null;
   updated_at?: string | null;
 };
@@ -566,6 +569,7 @@ export default function AgentConsole() {
   const [reviewTotal, setReviewTotal] = useState(0);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [reviewPreviewItem, setReviewPreviewItem] = useState<ReviewItem | null>(null);
   const [selectedReviewIds, setSelectedReviewIds] = useState<number[]>([]);
   const [reviewSubmittingAction, setReviewSubmittingAction] = useState<ReviewAction | null>(null);
   const [crawlPending, setCrawlPending] = useState<number | null>(null);
@@ -1068,12 +1072,14 @@ export default function AgentConsole() {
       const nextIds = new Set(nextItems.map((item) => item.id));
       setReviewItems(nextItems);
       setReviewTotal(Number.isFinite(json.total) ? json.total : nextItems.length);
+      setReviewPreviewItem((prev) => (prev && !nextIds.has(prev.id) ? null : prev));
       setSelectedReviewIds((prev) => prev.filter((id) => nextIds.has(id)));
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : '未知错误');
       setReviewItems([]);
       setReviewTotal(0);
       setSelectedReviewIds([]);
+      setReviewPreviewItem(null);
     } finally {
       setReviewLoading(false);
     }
@@ -1084,7 +1090,7 @@ export default function AgentConsole() {
     const normalizedIds = [...new Set(ids.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0))];
     if (!normalizedIds.length) {
       setReviewError('请先选择待复核图谱');
-      return;
+      return false;
     }
     setReviewSubmittingAction(action);
     setReviewError('');
@@ -1111,8 +1117,10 @@ export default function AgentConsole() {
       setSelectedReviewIds((prev) => prev.filter((id) => !normalizedIds.includes(id)));
       await fetchReviewItems();
       await refreshExecutionProgress();
+      return true;
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : '未知错误');
+      return false;
     } finally {
       setReviewSubmittingAction(null);
     }
@@ -1136,6 +1144,14 @@ export default function AgentConsole() {
 
   const handleSingleReview = (id: number, action: ReviewAction) => {
     void submitReviewAction([id], action);
+  };
+
+  const handlePreviewReviewAction = async (action: ReviewAction) => {
+    if (!reviewPreviewItem) return;
+    const ok = await submitReviewAction([reviewPreviewItem.id], action);
+    if (ok) {
+      setReviewPreviewItem(null);
+    }
   };
 
   const handleFetchBuildable = () => {
@@ -1493,7 +1509,7 @@ export default function AgentConsole() {
                   </div>
                 )}
                 {reviewItems.map((item) => {
-                  const title = item.name || item.site_name || '待复核图谱';
+                  const title = item.site_name || '待复核图谱';
                   const updatedLabel = formatTime(item.graph_built_at || item.updated_at);
                   const isChecked = selectedReviewIdSet.has(item.id);
                   const isSubmitting = reviewSubmittingAction !== null;
@@ -1514,6 +1530,26 @@ export default function AgentConsole() {
                           <p className="text-sm font-semibold text-slate-900 dark:text-white">{title}</p>
                           <p className="break-all text-sm text-slate-600 dark:text-slate-300">{item.url}</p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">图谱完成: {updatedLabel}</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+                              <div className="flex items-center gap-1">
+                                <FiDatabase className="h-3.5 w-3.5" />
+                                实体
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+                                {Number(item.entity_count || 0).toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-2 text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+                              <div className="flex items-center gap-1">
+                                <FiGitBranch className="h-3.5 w-3.5" />
+                                关系
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
+                                {Number(item.relation_count || 0).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="mt-2 flex items-center justify-between">
@@ -1522,6 +1558,13 @@ export default function AgentConsole() {
                           待复核
                         </span>
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setReviewPreviewItem(item)}
+                            disabled={isSubmitting}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-slate-600"
+                          >
+                            查看
+                          </button>
                           <button
                             onClick={() => handleSingleReview(item.id, 'reject')}
                             disabled={isSubmitting}
@@ -1812,6 +1855,88 @@ export default function AgentConsole() {
           </div>
         </div>
       </section>
+
+      {reviewPreviewItem && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+          onClick={() => setReviewPreviewItem(null)}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-[min(94vw,1280px)] flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/95 shadow-2xl dark:border-slate-700 dark:bg-slate-950/95"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-6 py-5 dark:border-slate-800">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                  复核概览
+                </p>
+                <h2 className="mt-2 truncate text-2xl font-semibold text-slate-900 dark:text-white">
+                  {reviewPreviewItem.site_name || '待复核图谱'}
+                </h2>
+                <p className="mt-2 break-all text-sm text-slate-500 dark:text-slate-400">{reviewPreviewItem.url}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    <FiDatabase className="h-3.5 w-3.5" />
+                    实体 {Number(reviewPreviewItem.entity_count || 0).toLocaleString()}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    <FiGitBranch className="h-3.5 w-3.5" />
+                    关系 {Number(reviewPreviewItem.relation_count || 0).toLocaleString()}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    <FiClock className="h-3.5 w-3.5" />
+                    图谱完成 {formatTime(reviewPreviewItem.graph_built_at || reviewPreviewItem.updated_at)}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewPreviewItem(null)}
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-white"
+                aria-label="关闭复核图谱弹窗"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-auto p-6">
+              <div className="mb-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">复核操作</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      确认图谱内容后，可直接在弹窗内通过或退回，提交后会同步刷新待复核列表。
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handlePreviewReviewAction('reject')}
+                      disabled={reviewSubmittingAction !== null}
+                      className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200"
+                    >
+                      {reviewSubmittingAction === 'reject' ? '退回中...' : '退回'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handlePreviewReviewAction('approve')}
+                      disabled={reviewSubmittingAction !== null}
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                    >
+                      {reviewSubmittingAction === 'approve' ? '通过中...' : '通过'}
+                    </button>
+                  </div>
+                </div>
+                {reviewError && (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-200">
+                    {reviewError}
+                  </div>
+                )}
+              </div>
+              <ProductGraph siteId={String(reviewPreviewItem.id)} authToken={authToken} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

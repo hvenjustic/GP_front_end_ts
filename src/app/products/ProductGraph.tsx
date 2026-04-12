@@ -206,14 +206,15 @@ const getRelationshipQualifiers = (edge: GraphEdge) => {
 };
 
 interface ProductGraphProps {
-  productId: string;
+  productId?: string;
+  siteId?: string;
   authToken?: string;
   reloadKey?: number;
   onBack?: () => void;
   isEmbedded?: boolean;
 }
 
-export default function ProductGraph({ productId, authToken = '', reloadKey = 0 }: ProductGraphProps) {
+export default function ProductGraph({ productId = '', siteId = '', authToken = '', reloadKey = 0 }: ProductGraphProps) {
   const [fullData, setFullData] = useState<GraphResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -227,7 +228,9 @@ export default function ProductGraph({ productId, authToken = '', reloadKey = 0 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const fetchGraph = async () => {
-    if (!productId) return;
+    const normalizedProductId = productId.trim();
+    const normalizedSiteId = siteId.trim();
+    if (!normalizedProductId && !normalizedSiteId) return;
     setLoading(true);
     setError('');
     setCanViewNodeDetails(false);
@@ -242,14 +245,17 @@ export default function ProductGraph({ productId, authToken = '', reloadKey = 0 
       if (authToken.trim()) {
         headers.set('Authorization', `Bearer ${authToken.trim()}`);
       }
-      const res = await fetch(`${API_BASE}/api/products/${encodeURIComponent(productId)}/graph_preview`, {
+      const endpoint = normalizedProductId
+        ? `${API_BASE}/api/products/${encodeURIComponent(normalizedProductId)}/graph_preview`
+        : `${API_BASE}/api/results/${encodeURIComponent(normalizedSiteId)}/graph_view`;
+      const res = await fetch(endpoint, {
         cache: 'no-store',
         headers,
       });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as GraphResponse;
       setFullData(json);
-      setCanViewNodeDetails(Boolean(json.can_view_node_details));
+      setCanViewNodeDetails(normalizedProductId ? Boolean(json.can_view_node_details) : true);
     } catch (e) {
       setError(e instanceof Error ? e.message : '未知错误');
       setFullData(null);
@@ -262,7 +268,7 @@ export default function ProductGraph({ productId, authToken = '', reloadKey = 0 
   useEffect(() => {
     void fetchGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, authToken, reloadKey]);
+  }, [productId, siteId, authToken, reloadKey]);
 
   const nodeById = useMemo(() => {
     const lookup: Record<string, GraphNode> = {};

@@ -43,7 +43,7 @@ const clampInt = (value: string | null, fallback: number, min: number, max: numb
 const RESULT_TABLE_COLUMN_WIDTHS = {
     select: '2%',
     id: '6%',
-    name: '14%',
+    siteName: '14%',
     url: '20%',
     status: '10%',
     pageCount: '9%',
@@ -369,7 +369,7 @@ export default function ResultListClient() {
                             <colgroup>
                                 <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.select }} />
                                 <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.id }} />
-                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.name }} />
+                                <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.siteName }} />
                                 <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.url }} />
                                 <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.status }} />
                                 <col style={{ width: RESULT_TABLE_COLUMN_WIDTHS.pageCount }} />
@@ -390,7 +390,7 @@ export default function ResultListClient() {
                                         />
                                     </th>
                                     <th className="px-4 py-3">ID</th>
-                                    <th className="px-4 py-3">name</th>
+                                    <th className="px-4 py-3">site_name</th>
                                     <th className="px-4 py-3">url</th>
                                     <th className="px-4 py-3">status</th>
                                     <th className="px-4 py-3">page_count</th>

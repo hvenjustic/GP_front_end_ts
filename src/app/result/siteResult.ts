@@ -1,6 +1,5 @@
 export type SiteResultItem = {
     id: number;
-    name?: string | null;
     site_name?: string | null;
     url: string;
     geo_location?: unknown;
@@ -42,11 +41,9 @@ export type ProcessedMarkdownResponse = {
 
 const GRAPH_BUILDABLE_STATUSES = new Set(['CRAWLED', 'GRAPH_FAILED', 'GRAPH_CANCELLED']);
 
-export const getSiteDisplayName = (item?: Pick<SiteResultItem, 'name' | 'site_name'> | null) => {
-    const primary = item?.name?.trim();
-    if (primary) return primary;
-    const secondary = item?.site_name?.trim();
-    if (secondary) return secondary;
+export const getSiteDisplayName = (item?: Pick<SiteResultItem, 'site_name'> | null) => {
+    const siteName = item?.site_name?.trim();
+    if (siteName) return siteName;
     return '—';
 };
 
