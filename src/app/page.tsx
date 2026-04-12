@@ -136,10 +136,10 @@ export default function Home() {
                 <FiArrowUpRight className="h-4 w-4" />
               </a>
               <a
-                href="/result/"
+                href="/products/"
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600"
               >
-                查看结果页
+                查看产品页
               </a>
             </div>
           </div>

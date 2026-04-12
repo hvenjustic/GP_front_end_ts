@@ -46,6 +46,7 @@ type GraphEdge = {
 type GraphResponse = {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  can_view_node_details?: boolean;
 };
 
 type RelationshipPreview = {
@@ -205,15 +206,18 @@ const getRelationshipQualifiers = (edge: GraphEdge) => {
 };
 
 interface ProductGraphProps {
-  id: string;
+  productId: string;
+  authToken?: string;
+  reloadKey?: number;
   onBack?: () => void;
   isEmbedded?: boolean;
 }
 
-export default function ProductGraph({ id }: ProductGraphProps) {
+export default function ProductGraph({ productId, authToken = '', reloadKey = 0 }: ProductGraphProps) {
   const [fullData, setFullData] = useState<GraphResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [canViewNodeDetails, setCanViewNodeDetails] = useState(false);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [visibleNodeIds, setVisibleNodeIds] = useState<Set<string>>(new Set());
@@ -223,9 +227,10 @@ export default function ProductGraph({ id }: ProductGraphProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const fetchGraph = async () => {
-    if (!id) return;
+    if (!productId) return;
     setLoading(true);
     setError('');
+    setCanViewNodeDetails(false);
     setSelectedType(null);
     setSelectedEntityId(null);
     setVisibleNodeIds(new Set());
@@ -233,15 +238,22 @@ export default function ProductGraph({ id }: ProductGraphProps) {
     setDetailModalNode(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/results/${encodeURIComponent(id)}/graph_view`, {
+      const headers = new Headers();
+      if (authToken.trim()) {
+        headers.set('Authorization', `Bearer ${authToken.trim()}`);
+      }
+      const res = await fetch(`${API_BASE}/api/products/${encodeURIComponent(productId)}/graph_preview`, {
         cache: 'no-store',
+        headers,
       });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as GraphResponse;
       setFullData(json);
+      setCanViewNodeDetails(Boolean(json.can_view_node_details));
     } catch (e) {
       setError(e instanceof Error ? e.message : '未知错误');
       setFullData(null);
+      setCanViewNodeDetails(false);
     } finally {
       setLoading(false);
     }
@@ -250,7 +262,7 @@ export default function ProductGraph({ id }: ProductGraphProps) {
   useEffect(() => {
     void fetchGraph();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [productId, authToken, reloadKey]);
 
   const nodeById = useMemo(() => {
     const lookup: Record<string, GraphNode> = {};
@@ -556,6 +568,11 @@ export default function ProductGraph({ id }: ProductGraphProps) {
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
             {graphSummary.nodeCount} 个实体 / {graphSummary.edgeCount} 条关系
           </span>
+          {!canViewNodeDetails && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+              未购仅展示实体与关系
+            </span>
+          )}
         </div>
         <button
           onClick={() => void fetchGraph()}
@@ -694,9 +711,11 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                       </div>
                     </div>
                     {selectedEntity.description && (
-                      <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                        {selectedEntity.description}
-                      </p>
+                      canViewNodeDetails ? (
+                        <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                          {selectedEntity.description}
+                        </p>
+                      ) : null
                     )}
                   </div>
 
@@ -706,15 +725,17 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                         核心信息
                       </div>
                       <div className="space-y-2 text-slate-600 dark:text-slate-300">
-                        <div>
-                          <span className="text-slate-400">节点 ID：</span>
-                          {selectedEntity.id}
-                        </div>
+                        {canViewNodeDetails && (
+                          <div>
+                            <span className="text-slate-400">节点 ID：</span>
+                            {selectedEntity.id}
+                          </div>
+                        )}
                         <div>
                           <span className="text-slate-400">直接关系：</span>
                           {selectedRelationships.length}
                         </div>
-                        {selectedEntity.aliases && selectedEntity.aliases.length > 0 && (
+                        {canViewNodeDetails && selectedEntity.aliases && selectedEntity.aliases.length > 0 && (
                           <div>
                             <div className="mb-1 text-slate-400">别名</div>
                             <div className="flex flex-wrap gap-2">
@@ -732,7 +753,13 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                       </div>
                     </div>
 
-                    {selectedEntityExtra.length > 0 && (
+                    {!canViewNodeDetails && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                        当前仅开放实体与关系预览。购买该图谱后，可查看节点描述、别名、属性字段和原始节点数据。
+                      </div>
+                    )}
+
+                    {canViewNodeDetails && selectedEntityExtra.length > 0 && (
                       <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/30">
                         <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
                           <FiTag className="h-3.5 w-3.5" />
@@ -751,7 +778,7 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                       </div>
                     )}
 
-                    {selectedEntityMeta.length > 0 && (
+                    {canViewNodeDetails && selectedEntityMeta.length > 0 && (
                       <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/30">
                         <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                           Meta
@@ -815,7 +842,7 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                       )}
                     </div>
 
-                    {selectedEntity.raw && (
+                    {canViewNodeDetails && selectedEntity.raw && (
                       <details className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/30">
                         <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-slate-500">
                           原始字段
@@ -831,8 +858,13 @@ export default function ProductGraph({ id }: ProductGraphProps) {
                 <div className="p-4">
                   <div className="text-base font-semibold text-slate-900 dark:text-white">结构总览</div>
                   <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    新图谱结构会把实体归一化为节点，把关系归一化为边，并保留别名、日期、属性、角色和限定字段。先从左侧选一个实体开始查看。
+                    新图谱结构会把实体归一化为节点，把关系归一化为边。先从左侧选一个实体开始查看。
                   </p>
+                  {!canViewNodeDetails && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                      当前商品页只开放实体与关系浏览。购买后再解锁节点详细信息。
+                    </div>
+                  )}
                   <div className="mt-4 grid grid-cols-3 gap-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center dark:border-slate-800 dark:bg-slate-950/40">
                       <div className="text-lg font-semibold text-slate-900 dark:text-white">{graphSummary.nodeCount}</div>

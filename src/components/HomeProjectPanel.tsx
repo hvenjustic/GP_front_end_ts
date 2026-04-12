@@ -1,12 +1,19 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiArrowUpRight,
+  FiBookOpen,
   FiCpu,
   FiDatabase,
   FiGlobe,
   FiMapPin,
   FiMessageCircle,
 } from 'react-icons/fi';
+import { getStoredToken, subscribeAuthToken } from '@/components/auth/authStorage';
+import { getAuthMe } from '@/lib/userCenterApi';
+import { isAdminRole } from '@/lib/userRole';
 
 const pipeline = [
   {
@@ -36,7 +43,8 @@ const entries = [
     href: '/result/',
     title: '结果列表',
     body: '查看站点状态、页面数、构图时长，并批量触发重爬或建图。',
-    icon: FiDatabase
+    icon: FiDatabase,
+    adminOnly: true
   },
   {
     href: '/graph/',
@@ -48,7 +56,14 @@ const entries = [
     href: '/agent/',
     title: 'Agent 控制台',
     body: '通过 SSE 查看工具规划、调用、结果和最终回答。',
-    icon: FiCpu
+    icon: FiCpu,
+    adminOnly: true
+  },
+  {
+    href: '/chat/',
+    title: '对话演示',
+    body: '面向普通用户的图谱问答演示页，仅开放查询型对话能力。',
+    icon: FiBookOpen
   },
   {
     href: '/products/',
@@ -65,6 +80,49 @@ const highlights = [
 ];
 
 export default function HomeProjectPanel() {
+  const [showAdminEntries, setShowAdminEntries] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshRole = async (token: string) => {
+      if (!token.trim()) {
+        if (!cancelled) {
+          setShowAdminEntries(false);
+        }
+        return;
+      }
+
+      try {
+        const user = await getAuthMe();
+        if (!cancelled) {
+          setShowAdminEntries(isAdminRole(user.role));
+        }
+      } catch {
+        if (!cancelled) {
+          setShowAdminEntries(false);
+        }
+      }
+    };
+
+    const initialToken = getStoredToken();
+    void refreshRole(initialToken);
+
+    const unsubscribe = subscribeAuthToken((token) => {
+      void refreshRole(token);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const visibleEntries = useMemo(
+    () => entries.filter((item) => !item.adminOnly || showAdminEntries),
+    [showAdminEntries]
+  );
+
   return (
     <section className="mx-auto mt-10 grid max-w-[108rem] gap-6 lg:grid-cols-[1.15fr_0.85fr]">
       <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/80 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
@@ -99,7 +157,7 @@ export default function HomeProjectPanel() {
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white">演示入口</h2>
           </div>
           <div className="grid gap-3">
-            {entries.map((item) => (
+            {visibleEntries.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

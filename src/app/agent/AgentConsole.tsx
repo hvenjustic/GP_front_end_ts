@@ -586,7 +586,7 @@ export default function AgentConsole() {
   };
 
   const getAgentAuthToken = () => {
-    const token = authToken.trim();
+    const token = authToken.trim() || getStoredToken().trim();
     if (!token) {
       openAuthDialog();
       throw new Error('请先登录后再使用 Agent 对话');
@@ -699,7 +699,10 @@ export default function AgentConsole() {
   };
 
   const fetchQueuePending = async (path: string) => {
-    const res = await fetch(`${AGENT_API_BASE}${path}`, { cache: 'no-store' });
+    const res = await fetch(`${AGENT_API_BASE}${path}`, {
+      cache: 'no-store',
+      headers: buildAgentAuthHeaders(),
+    });
     if (!res.ok) {
       throw new Error(`请求失败：${res.status}`);
     }
@@ -724,7 +727,10 @@ export default function AgentConsole() {
     while (page === 1 || (page - 1) * RESULT_PAGE_SIZE < total) {
       const res = await fetch(
         `${AGENT_API_BASE}/api/results?page=${page}&page_size=${RESULT_PAGE_SIZE}`,
-        { cache: 'no-store' }
+        {
+          cache: 'no-store',
+          headers: buildAgentAuthHeaders(),
+        }
       );
       if (!res.ok) {
         throw new Error(`请求失败：${res.status}`);
@@ -1052,7 +1058,10 @@ export default function AgentConsole() {
     setReviewLoading(true);
     setReviewError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/products/review?page=1&page_size=20`, { cache: 'no-store' });
+      const res = await fetch(`${AGENT_API_BASE}/api/products/review?page=1&page_size=20`, {
+        cache: 'no-store',
+        headers: buildAgentAuthHeaders(),
+      });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as ReviewResponse;
       const nextItems = json.items || [];
@@ -1080,9 +1089,11 @@ export default function AgentConsole() {
     setReviewSubmittingAction(action);
     setReviewError('');
     try {
+      const headers = new Headers(buildAgentAuthHeaders());
+      headers.set('Content-Type', 'application/json');
       const res = await fetch(`${AGENT_API_BASE}/api/products/review`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ ids: normalizedIds, action })
       });
       if (!res.ok) {

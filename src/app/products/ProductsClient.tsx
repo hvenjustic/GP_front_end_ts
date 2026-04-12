@@ -59,6 +59,7 @@ export default function ProductsClient() {
   const [authToken, setAuthToken] = useState('');
   const [pendingActions, setPendingActions] = useState<Record<number, 'cart' | 'buy' | undefined>>({});
   const [productFeedback, setProductFeedback] = useState<Record<number, ProductActionState | undefined>>({});
+  const [graphReloadKeys, setGraphReloadKeys] = useState<Record<number, number>>({});
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -131,6 +132,7 @@ export default function ProductsClient() {
     updateActionState(product.id, 'buy');
     try {
       const order = await buyNow(product.id, 1);
+      setGraphReloadKeys((prev) => ({ ...prev, [product.id]: (prev[product.id] || 0) + 1 }));
       updateFeedback(product.id, {
         tone: 'success',
         text: `立即结算成功，订单号 ${order.order_no}，本次扣除 ${order.total_points} 积分。`,
@@ -159,7 +161,7 @@ export default function ProductsClient() {
                 产品实体库
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-                展示从已完成建图的企业官网中同步出的产品实体。你可以按名称或来源 URL 检索，并展开查看对应站点图谱。
+                展示从已完成建图的企业官网中同步出的产品实体。你可以按名称或来源 URL 检索，并展开查看对应图谱中的实体与关系；节点详细信息需要购买后查看。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -401,7 +403,12 @@ export default function ProductsClient() {
 
                     {expanded && (
                       <div className="border-t border-slate-100 p-5 dark:border-slate-800">
-                        <ProductGraph id={String(product.source_site_id)} isEmbedded={true} />
+                        <ProductGraph
+                          productId={String(product.id)}
+                          authToken={authToken}
+                          reloadKey={graphReloadKeys[product.id] || 0}
+                          isEmbedded={true}
+                        />
                       </div>
                     )}
                   </div>

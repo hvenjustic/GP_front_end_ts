@@ -33,6 +33,7 @@ import {
   listRechargeOrders,
   logoutUser,
 } from '@/lib/userCenterApi';
+import { isAdminRole } from '@/lib/userRole';
 import {
   RESULT_LIST_LAST_HREF_EVENT,
   RESULT_LIST_LAST_HREF_STORAGE_KEY,
@@ -44,8 +45,8 @@ const navLinks = [
   { href: '/', label: '首页' },
   { href: '/graph/', label: '地理分布' },
   { href: '/products/', label: '产品实体' },
-  { href: '/agent/', label: 'Agent' },
-  { href: '/result/', label: '结果列表' },
+  { href: '/agent/', label: 'Agent', adminOnly: true },
+  { href: '/result/', label: '结果列表', adminOnly: true },
   { href: '/chat/', label: '对话演示' }
 ];
 
@@ -221,6 +222,10 @@ export default function Navbar() {
 
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
+  const visibleNavLinks = useMemo(
+    () => navLinks.filter((link) => !link.adminOnly || isAdminRole(user?.role)),
+    [user]
+  );
   const displayName = getUserDisplayName(user);
   const rechargeFenPreview = useMemo(() => {
     const normalized = rechargeAmount.trim();
@@ -559,7 +564,7 @@ export default function Navbar() {
           </div>
 
           <div className="hidden items-center gap-6 md:flex">
-            {navLinks.map((link) => {
+            {visibleNavLinks.map((link) => {
               const normalizedHref = link.href === '/' ? '/' : link.href.replace(/\/+$/, '');
               const resolvedHref = normalizedHref === '/result' ? resultNavHref : link.href;
               const isActive =
@@ -604,7 +609,7 @@ export default function Navbar() {
               className="md:hidden"
             >
               <div className="space-y-1 border-t border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-                {navLinks.map((link) => {
+                {visibleNavLinks.map((link) => {
                   const normalizedHref = link.href === '/' ? '/' : link.href.replace(/\/+$/, '');
                   const resolvedHref = normalizedHref === '/result' ? resultNavHref : link.href;
                   return (

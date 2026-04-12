@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FiArrowLeft, FiArrowRight, FiDownload, FiInfo, FiPlay, FiRefreshCw } from 'react-icons/fi';
+import { getStoredToken, openAuthDialog, subscribeAuthToken } from '@/components/auth/authStorage';
 import { API_BASE } from '@/config/api';
 import SiteDetailContent from './SiteDetailContent';
 import {
@@ -67,6 +68,7 @@ export default function ResultListClient() {
     const pageSize = 10;
     const sort = useMemo(() => normalizeResultSort(searchParams.get('sort')), [searchParams]);
 
+    const [authToken, setAuthToken] = useState('');
     const [data, setData] = useState<ResultListResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -92,12 +94,29 @@ export default function ResultListClient() {
     const buildHref = (nextPage: number, nextSort: ResultSortOption = sort) =>
         buildResultListHref(nextPage, pageSize, nextSort);
 
+    const buildAdminHeaders = () => {
+        const token = authToken.trim() || getStoredToken().trim();
+        if (!token) {
+            openAuthDialog();
+            throw new Error('请先登录管理员账号');
+        }
+        return {
+            Authorization: `Bearer ${token}`,
+        };
+    };
+
+    useEffect(() => {
+        setAuthToken(getStoredToken());
+        return subscribeAuthToken((token) => setAuthToken(token));
+    }, []);
+
     const fetchList = async () => {
         setLoading(true);
         setError('');
         try {
             const res = await fetch(`${API_BASE}/api/results?page=${page}&page_size=${pageSize}&sort=${sort}`, {
                 cache: 'no-store',
+                headers: buildAdminHeaders(),
             });
             if (!res.ok) throw new Error(`请求失败：${res.status}`);
             const json = (await res.json()) as ResultListResponse;
@@ -214,9 +233,11 @@ export default function ResultListClient() {
         setGraphFeedback('');
         setGraphError('');
         try {
+            const headers = new Headers(buildAdminHeaders());
+            headers.set('Content-Type', 'application/json');
             const res = await fetch(`${API_BASE}/api/results/graph/batch`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ ids: selectedGraphIds }),
             });
             const json = (await res.json()) as QueueAckResponse & { error?: string };
@@ -239,9 +260,11 @@ export default function ResultListClient() {
         setCrawlFeedback('');
         setCrawlError('');
         try {
+            const headers = new Headers(buildAdminHeaders());
+            headers.set('Content-Type', 'application/json');
             const res = await fetch(`${API_BASE}/api/tasks/crawl`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ ids: selectedIds }),
             });
             const json = (await res.json()) as QueueAckResponse & { error?: string };

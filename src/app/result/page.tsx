@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import ResultListClient from './ResultListClient';
+import ResultAccessGate from './ResultAccessGate';
 
 export default function ResultPage() {
   return (
@@ -14,7 +14,7 @@ export default function ResultPage() {
         </div>
       }
     >
-      <ResultListClient />
+      <ResultAccessGate />
     </Suspense>
   );
 }
