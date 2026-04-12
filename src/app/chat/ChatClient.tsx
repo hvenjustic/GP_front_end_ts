@@ -258,6 +258,7 @@ export default function ChatClient() {
   const streamTracesRef = useRef<TraceItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousCartItemIdsRef = useRef<number[]>([]);
+  const previousAuthTokenRef = useRef('');
 
   const totalItems = cart?.total_items || 0;
   const totalPoints = cart?.total_points || 0;
@@ -276,7 +277,10 @@ export default function ChatClient() {
   );
   const cartLineCount = cart?.items.length || 0;
   const allSelected = cartLineCount > 0 && selectedItems.length === cartLineCount;
-  const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
+  const canSend = useMemo(
+    () => input.trim().length > 0 && !isStreaming && Boolean(authToken.trim()),
+    [authToken, input, isStreaming]
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -323,6 +327,21 @@ export default function ChatClient() {
       unsubscribeCart();
     };
   }, []);
+
+  useEffect(() => {
+    if (previousAuthTokenRef.current !== authToken) {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      streamBufferRef.current = '';
+      streamTracesRef.current = [];
+      setMessages([]);
+      setSessionId(null);
+      setIsStreaming(false);
+      setStreamBuffer('');
+      setStreamTraces([]);
+      previousAuthTokenRef.current = authToken;
+    }
+  }, [authToken]);
 
   useEffect(() => {
     if (!authToken.trim()) {
@@ -391,11 +410,17 @@ export default function ChatClient() {
   };
 
   const startStream = (query: string) => {
+    const token = authToken.trim();
+    if (!token) {
+      openAuthDialog();
+      return;
+    }
     stopStream();
     const params = new URLSearchParams({ message: query, tool_scope: TOOL_SCOPE });
     if (sessionId) {
       params.set('session_id', sessionId);
     }
+    params.set('access_token', token);
 
     const es = new EventSource(`${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`);
     eventSourceRef.current = es;
@@ -446,6 +471,10 @@ export default function ChatClient() {
   };
 
   const sendMessage = (text: string) => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
     const normalized = text.trim();
     if (!normalized || isStreaming) return;
     setMessages((prev) => [...prev, { role: 'user', text: normalized }]);
@@ -801,7 +830,7 @@ export default function ChatClient() {
                   <textarea
                     value={input}
                     onChange={(event) => setInput(event.target.value)}
-                    placeholder="例如：帮我找生产感冒药的企业"
+                    placeholder={authToken.trim() ? '例如：帮我找生产感冒药的企业' : '请先登录后再使用图谱查询'}
                     rows={3}
                     className="min-h-[5.5rem] flex-1 resize-none bg-transparent text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
                     onKeyDown={(event) => {

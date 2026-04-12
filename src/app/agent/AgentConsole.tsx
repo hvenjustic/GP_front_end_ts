@@ -18,6 +18,7 @@ import {
   FiTrendingUp
 } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
+import { getStoredToken, openAuthDialog, subscribeAuthToken } from '@/components/auth/authStorage';
 import { AGENT_API_BASE } from '@/config/api';
 
 type ChatMessage = {
@@ -148,6 +149,7 @@ const toneColor: Record<string, string> = {
 };
 
 const AGENT_STORAGE_KEY = 'agent_console_state_v1';
+const buildAgentStorageKey = (token: string) => `${AGENT_STORAGE_KEY}:${token.trim() || 'anonymous'}`;
 
 type MarkdownTag = 'a' | 'blockquote' | 'code' | 'pre';
 
@@ -544,6 +546,7 @@ const traceSummaryDetail = (trace: TraceItem) => {
 };
 
 export default function AgentConsole() {
+  const [authToken, setAuthToken] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -582,11 +585,32 @@ export default function AgentConsole() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const getAgentAuthToken = () => {
+    const token = authToken.trim();
+    if (!token) {
+      openAuthDialog();
+      throw new Error('请先登录后再使用 Agent 对话');
+    }
+    return token;
+  };
+
+  const buildAgentAuthHeaders = () => ({
+    Authorization: `Bearer ${getAgentAuthToken()}`,
+  });
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, streamBuffer, streamTraces, isStreaming]);
 
-  const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [input, isStreaming]);
+  useEffect(() => {
+    setAuthToken(getStoredToken());
+    return subscribeAuthToken((token) => setAuthToken(token));
+  }, []);
+
+  const canSend = useMemo(
+    () => input.trim().length > 0 && !isStreaming && Boolean(authToken.trim()),
+    [authToken, input, isStreaming]
+  );
   const selectedReviewIdSet = useMemo(() => new Set(selectedReviewIds), [selectedReviewIds]);
   const allReviewItemsSelected = useMemo(
     () => reviewItems.length > 0 && reviewItems.every((item) => selectedReviewIdSet.has(item.id)),
@@ -594,8 +618,16 @@ export default function AgentConsole() {
   );
 
   useEffect(() => {
+    stopStream();
+    setMessages([]);
+    setCollapsedTracePanels({});
+    setSessionId(null);
+    setActiveSessionTitle(null);
+    if (!authToken.trim()) {
+      return;
+    }
     try {
-      const raw = sessionStorage.getItem(AGENT_STORAGE_KEY);
+      const raw = sessionStorage.getItem(buildAgentStorageKey(authToken));
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         messages?: ChatMessage[];
@@ -619,18 +651,21 @@ export default function AgentConsole() {
     } catch {
       // ignore sessionStorage parse error
     }
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
+    if (!authToken.trim()) {
+      return;
+    }
     try {
       sessionStorage.setItem(
-        AGENT_STORAGE_KEY,
+        buildAgentStorageKey(authToken),
         JSON.stringify({ messages, sessionId, activeSessionTitle })
       );
     } catch {
       // ignore sessionStorage write error
     }
-  }, [messages, sessionId, activeSessionTitle]);
+  }, [authToken, messages, sessionId, activeSessionTitle]);
 
   useEffect(() => {
     return () => {
@@ -903,6 +938,7 @@ export default function AgentConsole() {
   };
 
   const startSSEStream = (query: string) => {
+    const token = getAgentAuthToken();
     stopStream();
     streamBufferRef.current = '';
     streamTracesRef.current = [];
@@ -911,6 +947,7 @@ export default function AgentConsole() {
     setCollapsedTracePanels((prev) => ({ ...prev, 'streaming-trace': false }));
     const params = new URLSearchParams({ message: query });
     if (sessionId) params.set('session_id', sessionId);
+    params.set('access_token', token);
     const url = `${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
@@ -978,16 +1015,28 @@ export default function AgentConsole() {
   };
 
   const sendQuickMessage = (text: string) => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
     if (!text.trim() || isStreaming) return;
     setMessages((prev) => [...prev, { role: 'user', text }]);
     startSSEStream(text.trim());
   };
 
   const fetchSessions = async () => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
+    const headers = buildAgentAuthHeaders();
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions?limit=50`, { cache: 'no-store' });
+      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions?limit=50`, {
+        cache: 'no-store',
+        headers,
+      });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as AgentSession[];
       setSessions(json || []);
@@ -1094,6 +1143,10 @@ export default function AgentConsole() {
   };
 
   const openHistory = () => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
     setHistoryOpen(true);
     fetchSessions();
   };
@@ -1111,7 +1164,7 @@ export default function AgentConsole() {
     setActiveSessionTitle(null);
     closeHistory();
     try {
-      sessionStorage.removeItem(AGENT_STORAGE_KEY);
+      sessionStorage.removeItem(buildAgentStorageKey(authToken));
     } catch {
       // ignore sessionStorage clear error
     }
@@ -1213,10 +1266,18 @@ export default function AgentConsole() {
   };
 
   const loadHistorySession = async (session: AgentSession) => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
+    const headers = buildAgentAuthHeaders();
     setHistoryDetailLoadingId(session.session_id);
     setHistoryError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, { cache: 'no-store' });
+      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, {
+        cache: 'no-store',
+        headers,
+      });
       if (!res.ok) throw new Error(`请求失败：${res.status}`);
       const json = (await res.json()) as AgentSessionDetailResponse;
       stopStream();
@@ -1233,6 +1294,11 @@ export default function AgentConsole() {
   };
 
   const deleteHistorySession = async (session: AgentSession) => {
+    if (!authToken.trim()) {
+      openAuthDialog();
+      return;
+    }
+    const headers = buildAgentAuthHeaders();
     if (!session.session_id) {
       return;
     }
@@ -1249,7 +1315,8 @@ export default function AgentConsole() {
     setHistoryError('');
     try {
       const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers,
       });
       if (!res.ok) {
         let message = '删除失败';
@@ -1711,7 +1778,7 @@ export default function AgentConsole() {
                   <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
                     <textarea
                       className="min-h-[44px] max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
-                      placeholder="输入您的问题..."
+                      placeholder={authToken.trim() ? '输入您的问题...' : '请先登录后再使用 Agent 对话'}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       rows={3}
