@@ -61,8 +61,8 @@ const entries = [
   },
   {
     href: '/chat/',
-    title: '对话演示',
-    body: '面向普通用户的图谱问答演示页，仅开放查询型对话能力。',
+    title: '用户 Agent',
+    body: '与管理员使用同一套控制台外观，但仅开放查询型对话能力。',
     icon: FiBookOpen
   },
   {

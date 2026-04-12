@@ -47,7 +47,7 @@ const navLinks = [
   { href: '/products/', label: '产品实体' },
   { href: '/agent/', label: 'Agent', adminOnly: true },
   { href: '/result/', label: '结果列表', adminOnly: true },
-  { href: '/chat/', label: '对话演示' }
+  { href: '/chat/', label: '用户 Agent' }
 ];
 
 const PAGE_SIZE = 5;

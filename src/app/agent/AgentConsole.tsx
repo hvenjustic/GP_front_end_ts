@@ -63,6 +63,8 @@ type AgentSessionDetailResponse = {
   messages: AgentMessage[];
 };
 
+type AgentConsoleMode = 'admin' | 'user';
+
 type ReviewItem = {
   id: number;
   site_name?: string | null;
@@ -151,8 +153,10 @@ const toneColor: Record<string, string> = {
   rose: 'text-rose-600 dark:text-rose-200 bg-rose-50 dark:bg-rose-900/30'
 };
 
-const AGENT_STORAGE_KEY = 'agent_console_state_v1';
-const buildAgentStorageKey = (token: string) => `${AGENT_STORAGE_KEY}:${token.trim() || 'anonymous'}`;
+const AGENT_STORAGE_KEY = 'agent_console_state_v2';
+const buildAgentStorageKey = (mode: AgentConsoleMode, token: string) =>
+  `${AGENT_STORAGE_KEY}:${mode}:${token.trim() || 'anonymous'}`;
+const USER_AGENT_QUICK_PROMPTS = ['帮我找生产感冒药相关产品的企业', '查询图谱里和阿莫西林相关的公司', '帮我找一下主营退热止痛产品的企业'];
 
 type MarkdownTag = 'a' | 'blockquote' | 'code' | 'pre';
 
@@ -548,7 +552,17 @@ const traceSummaryDetail = (trace: TraceItem) => {
   }
 };
 
-export default function AgentConsole() {
+export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMode }) {
+  const isAdminMode = mode === 'admin';
+  const streamPath = isAdminMode ? '/api/admin-agent/stream' : '/api/user-agent/stream';
+  const sessionsPath = isAdminMode ? '/api/admin-agent/sessions' : '/api/user-agent/sessions';
+  const consoleTitle = isAdminMode ? '智能助手' : '图谱查询 Agent';
+  const consoleBadge = isAdminMode ? '管理员工具全开' : '仅开放图谱查询工具';
+  const emptyStateTitle = isAdminMode ? '从任务推进开始' : '从产品关键词开始查询';
+  const emptyStateBody = isAdminMode
+    ? '你可以让 Agent 协助爬取、构建图谱、站点改名、商品复核和价格调整。'
+    : '当前页面仅开放图谱查询工具，可根据产品、药品或用途关键词查询命中的企业。';
+  const inputPlaceholder = isAdminMode ? '输入您的问题...' : '例如：帮我找生产感冒药的企业';
   const [authToken, setAuthToken] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -631,7 +645,7 @@ export default function AgentConsole() {
       return;
     }
     try {
-      const raw = sessionStorage.getItem(buildAgentStorageKey(authToken));
+      const raw = sessionStorage.getItem(buildAgentStorageKey(mode, authToken));
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         messages?: ChatMessage[];
@@ -655,7 +669,7 @@ export default function AgentConsole() {
     } catch {
       // ignore sessionStorage parse error
     }
-  }, [authToken]);
+  }, [authToken, mode]);
 
   useEffect(() => {
     if (!authToken.trim()) {
@@ -663,13 +677,13 @@ export default function AgentConsole() {
     }
     try {
       sessionStorage.setItem(
-        buildAgentStorageKey(authToken),
+        buildAgentStorageKey(mode, authToken),
         JSON.stringify({ messages, sessionId, activeSessionTitle })
       );
     } catch {
       // ignore sessionStorage write error
     }
-  }, [authToken, messages, sessionId, activeSessionTitle]);
+  }, [authToken, messages, sessionId, activeSessionTitle, mode]);
 
   useEffect(() => {
     return () => {
@@ -793,6 +807,20 @@ export default function AgentConsole() {
   };
 
   useEffect(() => {
+    if (!isAdminMode) {
+      setCrawlPending(null);
+      setGraphPending(null);
+      setOnSaleTotal(null);
+      setBuildableTotal(null);
+      setProgressError('');
+      setProgressUpdatedAt(null);
+      setReviewItems([]);
+      setReviewTotal(0);
+      setReviewError('');
+      setSelectedReviewIds([]);
+      setReviewPreviewItem(null);
+      return;
+    }
     void refreshExecutionProgress();
     void fetchReviewItems();
     progressPollingRef.current = window.setInterval(() => {
@@ -806,7 +834,7 @@ export default function AgentConsole() {
         progressPollingRef.current = null;
       }
     };
-  }, []);
+  }, [isAdminMode]);
 
   const traceTimeline = useMemo(() => {
     const latestAgentTrace = [...messages]
@@ -826,7 +854,8 @@ export default function AgentConsole() {
       .reverse();
   }, [messages, streamTraces]);
 
-  const executionProgressCards = [
+  const executionProgressCards = isAdminMode
+    ? [
     {
       label: '爬取进度',
       value: formatMetricValue(crawlPending),
@@ -857,6 +886,36 @@ export default function AgentConsole() {
       label: '可构建数量',
       value: formatMetricValue(buildableTotal),
       hint: buildableTotal === null ? '等待计算可构建任务' : `当前可直接构建 ${buildableTotal} 个站点`,
+      icon: FiTrendingUp,
+      tone: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200'
+    }
+  ]
+    : [
+    {
+      label: 'Agent 类型',
+      value: '用户',
+      hint: '当前会话已切换到用户 Agent，界面与管理员保持一致。',
+      icon: FiMessageCircle,
+      tone: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-200'
+    },
+    {
+      label: '工具范围',
+      value: '图谱查询',
+      hint: '仅开放图谱查询工具，不能发起爬取、构建、复核或改价。',
+      icon: FiDatabase,
+      tone: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-200'
+    },
+    {
+      label: '历史会话',
+      value: String(sessions.length),
+      hint: sessions.length > 0 ? `当前已加载 ${sessions.length} 条会话记录` : '可通过右上角历史按钮查看用户 Agent 会话',
+      icon: FiClock,
+      tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200'
+    },
+    {
+      label: '当前状态',
+      value: isStreaming ? '回答中' : '待命',
+      hint: isStreaming ? '正在根据产品关键词查询企业并整理结果' : '输入产品、药品或用途关键词开始查询',
       icon: FiTrendingUp,
       tone: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200'
     }
@@ -958,7 +1017,7 @@ export default function AgentConsole() {
     const params = new URLSearchParams({ message: query });
     if (sessionId) params.set('session_id', sessionId);
     params.set('access_token', token);
-    const url = `${AGENT_API_BASE}/api/chat/agent/stream?${params.toString()}`;
+    const url = `${AGENT_API_BASE}${streamPath}?${params.toString()}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
     setIsStreaming(true);
@@ -1043,7 +1102,7 @@ export default function AgentConsole() {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions?limit=50`, {
+      const res = await fetch(`${AGENT_API_BASE}${sessionsPath}?limit=50`, {
         cache: 'no-store',
         headers,
       });
@@ -1191,7 +1250,7 @@ export default function AgentConsole() {
     setActiveSessionTitle(null);
     closeHistory();
     try {
-      sessionStorage.removeItem(buildAgentStorageKey(authToken));
+      sessionStorage.removeItem(buildAgentStorageKey(mode, authToken));
     } catch {
       // ignore sessionStorage clear error
     }
@@ -1301,7 +1360,7 @@ export default function AgentConsole() {
     setHistoryDetailLoadingId(session.session_id);
     setHistoryError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, {
+      const res = await fetch(`${AGENT_API_BASE}${sessionsPath}/${session.session_id}`, {
         cache: 'no-store',
         headers,
       });
@@ -1341,7 +1400,7 @@ export default function AgentConsole() {
     setHistoryDeletingId(session.session_id);
     setHistoryError('');
     try {
-      const res = await fetch(`${AGENT_API_BASE}/api/agent/sessions/${session.session_id}`, {
+      const res = await fetch(`${AGENT_API_BASE}${sessionsPath}/${session.session_id}`, {
         method: 'DELETE',
         headers,
       });
@@ -1384,10 +1443,10 @@ export default function AgentConsole() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
                   <FiActivity className="h-4 w-4 text-indigo-500" />
-                  执行进度
+                  {isAdminMode ? '执行进度' : '能力概览'}
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  实时
+                  {isAdminMode ? '实时' : '用户 Agent'}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1410,8 +1469,14 @@ export default function AgentConsole() {
                 ))}
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-                <span>{progressUpdatedAt ? `最近同步：${formatTime(new Date(progressUpdatedAt).toISOString())}` : '最近同步：—'}</span>
-                {progressError ? <span className="text-amber-600 dark:text-amber-300">{progressError}</span> : null}
+                <span>
+                  {isAdminMode
+                    ? progressUpdatedAt
+                      ? `最近同步：${formatTime(new Date(progressUpdatedAt).toISOString())}`
+                      : '最近同步：—'
+                    : '当前页面仅开放图谱查询能力'}
+                </span>
+                {isAdminMode && progressError ? <span className="text-amber-600 dark:text-amber-300">{progressError}</span> : null}
               </div>
             </Card>
 
@@ -1440,8 +1505,9 @@ export default function AgentConsole() {
             </Card>
           </div>
 
-          {/* 复核待办 */}
+          {/* 中间面板 */}
           <div className="space-y-4 overflow-y-auto pr-1 md:col-span-1">
+            {isAdminMode ? (
             <Card>
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
@@ -1586,6 +1652,45 @@ export default function AgentConsole() {
                 })}
               </div>
             </Card>
+            ) : (
+            <Card>
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  <FiDatabase className="h-4 w-4 text-sky-500" />
+                  查询范围
+                </div>
+                <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-100">
+                  {consoleBadge}
+                </span>
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-800/40">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">支持内容</p>
+                  <div className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                    <p>按产品、药品、用途关键词查询匹配企业。</p>
+                    <p>查看 Agent 的工具调用过程和历史会话。</p>
+                    <p>不支持爬取、构图、复核、改名、改价等管理员操作。</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-800/40">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">快捷问题</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {USER_AGENT_QUICK_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => sendQuickMessage(prompt)}
+                        disabled={isStreaming}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-slate-600"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+            )}
           </div>
 
           {/* 聊天交互（占 1/2，右侧全高） */}
@@ -1688,7 +1793,7 @@ export default function AgentConsole() {
                     <FiMessageCircle className="h-4 w-4" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800 dark:text-white">智能助手</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-white">{consoleTitle}</span>
                     {activeSessionTitle && (
                       <span className="text-[10px] text-slate-500 truncate max-w-[200px]">{activeSessionTitle}</span>
                     )}
@@ -1708,6 +1813,20 @@ export default function AgentConsole() {
               {/* Chat Messages Area */}
               <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
                 <div className="mx-auto min-w-0 w-full max-w-[72rem] space-y-8">
+                  {messages.length === 0 && !isStreaming && (
+                    <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/70 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                      <div className="max-w-xl">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                          <FiMessageCircle className="h-6 w-6" />
+                        </div>
+                        <h2 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">{emptyStateTitle}</h2>
+                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{emptyStateBody}</p>
+                        <div className="mt-4 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                          {consoleBadge}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {messages.map((msg, idx) => {
                     const messageKey = `${msg.role}-${idx}`;
                     const isCopied = copiedMessageKey === messageKey;
@@ -1832,7 +1951,7 @@ export default function AgentConsole() {
                   <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
                     <textarea
                       className="min-h-[44px] max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
-                      placeholder={authToken.trim() ? '输入您的问题...' : '请先登录后再使用 Agent 对话'}
+                      placeholder={authToken.trim() ? inputPlaceholder : '请先登录后再使用 Agent 对话'}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       rows={3}
