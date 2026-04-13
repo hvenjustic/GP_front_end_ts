@@ -17,7 +17,6 @@ type MapPoint = {
 };
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
-const PREVIEW_COUNT = 8;
 const POINT_PALETTE = ['#2563eb', '#0ea5e9', '#22c55e', '#f97316', '#e11d48', '#a855f7', '#14b8a6', '#f59e0b'];
 
 // Marker 可调参数（你可以在这里改数值来调试）
@@ -29,14 +28,13 @@ const MARKER_OPACITY = 0.85;
 const MARKER_FIXED_SIZE = true;
 
 type GraphLocateItem = {
-  id: number;
+  name: string;
   latitude: number;
   longitude: number;
 };
 
 type GraphLocateResponse = {
   items?: GraphLocateItem[];
-  total?: number;
 };
 
 type Bounds = {
@@ -102,13 +100,20 @@ export default function GraphClient() {
       const payload = (await res.json()) as GraphLocateResponse | GraphLocateItem[];
       const items = Array.isArray(payload) ? payload : payload.items ?? [];
       const next: MapPoint[] = items
-        .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
+        .filter(
+          (item) =>
+            typeof item.name === 'string' &&
+            item.name.trim() &&
+            Number.isFinite(item.latitude) &&
+            Number.isFinite(item.longitude)
+        )
         .map((item, index) => {
           const longitude = Number(item.longitude.toFixed(6));
           const latitude = Number(item.latitude.toFixed(6));
+          const name = item.name.trim();
           return {
-            id: String(item.id),
-            name: `站点 ${item.id}`,
+            id: `${name}-${longitude}-${latitude}`,
+            name,
             coordinates: [longitude, latitude],
             longitude,
             latitude,
@@ -129,8 +134,6 @@ export default function GraphClient() {
     fetchPoints();
   }, [fetchPoints]);
 
-  const preview = useMemo(() => points.slice(0, PREVIEW_COUNT), [points]);
-  const remaining = Math.max(points.length - preview.length, 0);
   const markerScale = useMemo(() => (MARKER_FIXED_SIZE ? 1 / Math.max(mapZoom, 0.1) : 1), [mapZoom]);
 
   const resetView = useCallback(() => {
@@ -185,7 +188,7 @@ export default function GraphClient() {
         </div>
       </section>
 
-      <section className="mx-auto mt-8 grid max-w-[108rem] gap-6 lg:grid-cols-[1.8fr_0.6fr]">
+      <section className="mx-auto mt-8 max-w-[108rem]">
         <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/80 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -253,38 +256,6 @@ export default function GraphClient() {
               地图数据来自 world-atlas，点位来自后端 <code>/api/graph_locate</code>。
             </p>
           )}
-        </div>
-
-        <div className="glass-panel rounded-2xl border border-gray-200/60 bg-white/70 p-5 shadow-sm dark:border-gray-800/60 dark:bg-slate-900/70">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">点位概览</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {loading ? '正在从后端加载点位...' : points.length ? `展示前 ${preview.length} 个点位` : '暂无点位（需要先提交任务并成功写入 geo_location）'}
-          </p>
-          <div className="mt-4 space-y-3">
-            {points.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                {loading ? '加载中...' : error ? '加载失败' : '暂无数据'}
-              </div>
-            ) : (
-              preview.map((point) => (
-                <div
-                  key={point.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-xs font-medium text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: point.color }} />
-                    <span>{point.name}</span>
-                  </div>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    纬度 {point.latitude.toFixed(2)}° · 经度 {point.longitude.toFixed(2)}°
-                  </span>
-                </div>
-              ))
-            )}
-            {remaining > 0 && (
-              <div className="text-xs text-slate-500 dark:text-slate-400">还有 {remaining} 个点位未展开</div>
-            )}
-          </div>
         </div>
       </section>
     </div>
