@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
-import { FiMapPin, FiRefreshCw } from 'react-icons/fi';
+import { FiMapPin } from 'react-icons/fi';
 
 import { API_BASE } from '@/config/api';
 
@@ -168,22 +168,6 @@ export default function GraphClient() {
             ) : (
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">点击国家可放大查看</span>
             )}
-            <button
-              type="button"
-              onClick={resetView}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200 dark:hover:border-slate-600"
-            >
-              重置视图
-            </button>
-            <button
-              type="button"
-              onClick={fetchPoints}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200 dark:hover:border-slate-600"
-            >
-              <FiRefreshCw className="h-4 w-4" />
-              {loading ? '刷新中...' : '刷新点位'}
-            </button>
           </div>
         </div>
       </section>
@@ -197,7 +181,14 @@ export default function GraphClient() {
             </div>
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">点位：{points.length || '—'}</span>
           </div>
-          <div className="h-[70vh] w-full rounded-2xl bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-2 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+          <div className="relative h-[70vh] w-full rounded-2xl bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-2 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+            <button
+              type="button"
+              onClick={resetView}
+              className="absolute right-5 top-5 z-10 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-200 dark:hover:border-slate-600"
+            >
+              重置视图
+            </button>
             <ComposableMap
               projection="geoMercator"
               projectionConfig={{ scale: 145 }}
@@ -208,10 +199,8 @@ export default function GraphClient() {
                 center={mapCenter}
                 zoom={mapZoom}
                 maxZoom={8}
-                onMove={({ zoom, coordinates }: { zoom: number; coordinates: [number, number] }) => {
-                  setMapZoom(zoom);
-                  setMapCenter(coordinates);
-                }}
+                disablePanning
+                filterZoomEvent={() => false}
               >
                 <Geographies geography={GEO_URL}>
                   {({ geographies }: { geographies: any[] }) =>
