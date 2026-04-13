@@ -55,7 +55,7 @@ export default function AgentAccessGate() {
       <div className="mx-auto flex min-h-[calc(100vh-9rem)] max-w-3xl items-center justify-center px-6">
         <div className="w-full rounded-3xl border border-slate-200/80 bg-white/90 px-8 py-10 text-center shadow-sm dark:border-slate-800 dark:bg-slate-950/80">
           <div className="text-sm font-semibold text-slate-900 dark:text-white">正在校验管理员权限</div>
-          <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">非管理员会自动跳转到对话演示页。</div>
+          <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">非管理员会自动跳转到用户工作台。</div>
         </div>
       </div>
     );

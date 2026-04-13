@@ -47,7 +47,7 @@ const navLinks = [
   { href: '/products/', label: '产品实体' },
   { href: '/agent/', label: 'Agent', adminOnly: true },
   { href: '/result/', label: '结果列表', adminOnly: true },
-  { href: '/chat/', label: '用户 Agent' }
+  { href: '/chat/', label: '结算&Agent' }
 ];
 
 const PAGE_SIZE = 5;
@@ -553,14 +553,8 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
               <Image src="/context-icon.svg" alt="Logo" width={40} height={30} className="h-9 w-auto" />
-              企业官网图谱
+              生物知识图谱
             </Link>
-            <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex dark:border-slate-800 dark:text-slate-300">
-              毕业设计
-            </span>
-            <span className="hidden items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 md:inline-flex dark:border-slate-800 dark:text-slate-300">
-              FastAPI + Next.js
-            </span>
           </div>
 
           <div className="hidden items-center gap-6 md:flex">

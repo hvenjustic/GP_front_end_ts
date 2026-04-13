@@ -1,16 +1,12 @@
 import type { ReactNode } from 'react';
 import {
   FiArrowUpRight,
-  FiBookOpen,
   FiCheckCircle,
   FiCpu,
   FiLayers,
   FiMessageCircle,
-  FiTrendingUp,
-  FiZap
+  FiTrendingUp
 } from 'react-icons/fi';
-import HomeProjectPanel from '@/components/HomeProjectPanel';
-import QuickActions from '@/components/QuickActions';
 
 const statHighlights = [
   {
@@ -71,29 +67,6 @@ const activity = [
     when: '当前版本'
   }
 ];
-
-const blueprint = `konwledge-graph
-├── GP_back_end_py
-│   ├── app
-│   │   ├── services          # 爬取、建图、查询、Agent
-│   │   ├── handlers          # API 处理
-│   │   └── repositories      # 数据访问
-│   ├── prompts
-│   │   └── graph_extract     # 图谱抽取 Prompt
-│   └── tests                 # 后端测试
-└── GP_front_end_ts
-    └── src
-        ├── app
-        │   ├── page.tsx      # 首页 · 项目总览
-        │   ├── result        # 站点结果列表
-        │   ├── graph         # 地理分布
-        │   ├── products      # 产品实体库
-        │   ├── agent         # Agent 面板
-        │   └── chat          # 静态对话演示
-        └── components
-            ├── HomeProjectPanel.tsx
-            ├── QuickActions.tsx
-            └── navBar/Navbar.tsx`;
 
 const Pill = ({ text }: { text: string }) => (
   <span className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/50 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-indigo-200">
@@ -182,14 +155,10 @@ export default function Home() {
           </Card>
         ))}
       </section>
-
-      <HomeProjectPanel />
-
       <section className="mx-auto mt-10 max-w-[108rem]" id="activity">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">动态</p>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">项目当前重点</h2>
           </div>
           <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
             <FiTrendingUp className="h-4 w-4" />
@@ -214,36 +183,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto mt-10 max-w-[108rem]" id="blueprint">
-        <div className="mb-4 flex items-center gap-2">
-          <FiLayers className="h-4 w-4 text-indigo-500" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">目录蓝图</h2>
-        </div>
-        <Card>
-          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-            <pre className="max-h-[320px] overflow-auto rounded-xl bg-slate-900 p-4 text-sm leading-relaxed text-slate-100 shadow-inner">
-{blueprint}
-            </pre>
-            <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-              <div className="flex items-center gap-2 text-slate-900 dark:text-white">
-                <FiBookOpen className="h-4 w-4 text-indigo-500" />
-                <span>阅读建议</span>
-              </div>
-              <p>先看后端的 <code>app/services</code>，可以快速抓住爬取、建图、查询和 Agent 的主逻辑。</p>
-              <p>前端建议从 <code>/result</code>、<code>/graph</code>、<code>/agent</code> 三个页面进入，最适合答辩演示。</p>
-              <p>抽取策略相关内容集中在 <code>prompts/graph_extract</code>，适合在论文中解释知识设计和 Prompt 分工。</p>
-            </div>
-          </div>
-        </Card>
-      </section>
-
-      <section className="mx-auto mt-10 max-w-[108rem]" id="actions">
-        <div className="mb-4 flex items-center gap-2">
-          <FiZap className="h-4 w-4 text-amber-500" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">收尾与演示</h2>
-        </div>
-        <QuickActions />
-      </section>
     </div>
   );
 }

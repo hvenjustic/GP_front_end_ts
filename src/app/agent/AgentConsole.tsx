@@ -64,6 +64,7 @@ type AgentSessionDetailResponse = {
 };
 
 type AgentConsoleMode = 'admin' | 'user';
+type AgentConsoleLayout = 'full' | 'panel';
 
 type ReviewItem = {
   id: number;
@@ -552,16 +553,23 @@ const traceSummaryDetail = (trace: TraceItem) => {
   }
 };
 
-export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMode }) {
+export default function AgentConsole({
+  mode = 'admin',
+  layout = 'full'
+}: {
+  mode?: AgentConsoleMode;
+  layout?: AgentConsoleLayout;
+}) {
   const isAdminMode = mode === 'admin';
+  const isPanelOnly = layout === 'panel';
   const streamPath = isAdminMode ? '/api/admin-agent/stream' : '/api/user-agent/stream';
   const sessionsPath = isAdminMode ? '/api/admin-agent/sessions' : '/api/user-agent/sessions';
-  const consoleTitle = isAdminMode ? '智能助手' : '图谱查询 Agent';
-  const consoleBadge = isAdminMode ? '管理员工具全开' : '仅开放图谱查询工具';
+  const consoleTitle = isAdminMode ? '智能助手' : '结算&Agent';
+  const consoleBadge = isAdminMode ? '管理员工具全开' : '';
   const emptyStateTitle = isAdminMode ? '从任务推进开始' : '从产品关键词开始查询';
   const emptyStateBody = isAdminMode
     ? '你可以让 Agent 协助爬取、构建图谱、站点改名、商品复核和价格调整。'
-    : '当前页面仅开放图谱查询工具，可根据产品、药品或用途关键词查询命中的企业。';
+    : '可根据产品、药品或用途关键词查询命中的企业。';
   const inputPlaceholder = isAdminMode ? '输入您的问题...' : '例如：帮我找生产感冒药的企业';
   const [authToken, setAuthToken] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -894,21 +902,15 @@ export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMo
     {
       label: 'Agent 类型',
       value: '用户',
-      hint: '当前会话已切换到用户 Agent，界面与管理员保持一致。',
+      hint: '当前会话已切换到结算&Agent，界面与管理员保持一致。',
       icon: FiMessageCircle,
       tone: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-200'
     },
-    {
-      label: '工具范围',
-      value: '图谱查询',
-      hint: '仅开放图谱查询工具，不能发起爬取、构建、复核或改价。',
-      icon: FiDatabase,
-      tone: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-200'
-    },
+    
     {
       label: '历史会话',
       value: String(sessions.length),
-      hint: sessions.length > 0 ? `当前已加载 ${sessions.length} 条会话记录` : '可通过右上角历史按钮查看用户 Agent 会话',
+      hint: sessions.length > 0 ? `当前已加载 ${sessions.length} 条会话记录` : '可通过右上角历史按钮查看结算&Agent 会话',
       icon: FiClock,
       tone: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-200'
     },
@@ -1429,6 +1431,290 @@ export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMo
     }
   };
 
+  const renderAgentPanel = () => (
+    <div className="flex h-full min-h-0 min-w-0 w-full">
+      <Card className="relative h-full w-full !p-0 overflow-hidden flex flex-col bg-gradient-to-b from-sky-50 to-white shadow-xl border-none">
+        {historyOpen && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-white/80 bg-white/90 p-5 shadow-2xl backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-bold text-slate-800 dark:text-white">历史对话</div>
+                <button
+                  onClick={closeHistory}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  关闭
+                </button>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <button
+                  onClick={resetChat}
+                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-200"
+                >
+                  <FiMessageCircle className="h-3.5 w-3.5" />
+                  新对话
+                </button>
+                <button
+                  onClick={fetchSessions}
+                  disabled={historyLoading}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
+                >
+                  <FiRefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
+                  刷新
+                </button>
+              </div>
+              {historyError && (
+                <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200">
+                  {historyError}
+                </div>
+              )}
+              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+                {historyLoading && (
+                  <div className="flex items-center justify-center py-8 text-slate-400">
+                    <FiRefreshCw className="mr-2 h-4 w-4 animate-spin" /> 加载中...
+                  </div>
+                )}
+                {!historyLoading && sessions.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 text-slate-400">
+                    <FiMessageCircle className="mb-2 h-8 w-8 opacity-20" />
+                    <p className="text-xs">暂无历史对话</p>
+                  </div>
+                )}
+                {sessions.map((session) => {
+                  const updatedLabel = formatTime(session.updated_at || session.created_at);
+                  const isActive = session.session_id === sessionId;
+                  const isLoading = historyDetailLoadingId === session.session_id;
+                  const isDeleting = historyDeletingId === session.session_id;
+                  return (
+                    <div key={session.session_id} className="group flex items-center gap-2">
+                      <button
+                        onClick={() => loadHistorySession(session)}
+                        disabled={isLoading || isDeleting}
+                        className={`flex-1 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${
+                          isActive
+                            ? 'border-indigo-200 bg-indigo-50 shadow-sm ring-1 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-900/30'
+                            : 'border-transparent bg-slate-50 hover:bg-slate-100 hover:shadow-sm dark:bg-slate-800/50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`text-sm font-medium ${
+                              isActive ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-700 dark:text-slate-200'
+                            }`}
+                          >
+                            {session.title || '未命名对话'}
+                          </span>
+                          <span className="text-[10px] text-slate-400">{isLoading ? '加载中…' : updatedLabel}</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteHistorySession(session)}
+                        disabled={isLoading || isDeleting}
+                        aria-label="删除对话"
+                        className="invisible inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:visible group-hover:opacity-100 dark:hover:bg-rose-900/30 dark:hover:text-rose-300"
+                      >
+                        <FiTrash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex shrink-0 items-center justify-between border-b border-sky-100 bg-white/60 px-5 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
+              <FiMessageCircle className="h-4 w-4" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-slate-800 dark:text-white">{consoleTitle}</span>
+              {activeSessionTitle && (
+                <span className="max-w-[200px] truncate text-[10px] text-slate-500">{activeSessionTitle}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openHistory}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-indigo-600 hover:ring-indigo-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
+            >
+              <FiClock className="h-3.5 w-3.5" />
+              历史
+            </button>
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+          <div className="mx-auto min-w-0 w-full max-w-[72rem] space-y-8">
+            {messages.length === 0 && !isStreaming && (
+              <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/70 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                <div className="max-w-xl">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                    <FiMessageCircle className="h-6 w-6" />
+                  </div>
+                  <h2 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">{emptyStateTitle}</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{emptyStateBody}</p>
+                  {consoleBadge ? (
+                    <div className="mt-4 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      {consoleBadge}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
+            {messages.map((msg, idx) => {
+              const messageKey = `${msg.role}-${idx}`;
+              const isCopied = copiedMessageKey === messageKey;
+
+              if (msg.role === 'user') {
+                return (
+                  <div key={messageKey} className="group flex justify-end">
+                    <div className="max-w-[78%]">
+                      <div className="rounded-3xl rounded-tr-md bg-slate-100 px-5 py-3 text-sm leading-7 text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100">
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                      </div>
+                      <div
+                        className={`mt-2 flex justify-end pr-1 transition-opacity duration-200 ${
+                          isCopied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void copyMessageText(msg.text, messageKey)}
+                          aria-label={isCopied ? '已复制消息' : '复制消息'}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                            isCopied
+                              ? 'text-emerald-700 dark:text-emerald-200'
+                              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
+                          {isCopied ? '已复制' : '复制'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={messageKey}
+                  className="group min-w-0 w-full border-b border-slate-200/70 pb-8 last:border-b-0 dark:border-slate-800/80"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Agent</div>
+                    <button
+                      type="button"
+                      onClick={() => void copyMessageText(msg.text, messageKey)}
+                      aria-label={isCopied ? '已复制消息' : '复制消息'}
+                      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                        isCopied
+                          ? 'text-emerald-700 dark:text-emerald-200'
+                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
+                      {isCopied ? '已复制' : '复制'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 min-w-0 space-y-4">
+                    {renderTracePanel(msg.traces || [], '工具执行过程', `${messageKey}-trace`)}
+
+                    <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                      <AgentMarkdown content={msg.text} />
+                    </div>
+
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="flex flex-wrap gap-2 border-t border-dashed border-slate-200 pt-3 dark:border-slate-800">
+                        {msg.citations.map((cite, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:text-slate-300"
+                          >
+                            引用 {i + 1}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {isStreaming && (
+              <div className="min-w-0 w-full border-b border-slate-200/70 pb-8 dark:border-slate-800/80">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Agent</div>
+                  <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    处理中
+                  </div>
+                </div>
+
+                <div className="mt-3 min-w-0 space-y-4">
+                  {renderTracePanel(streamTraces, '工具执行过程', 'streaming-trace', true)}
+
+                  <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
+                    {streamBuffer ? (
+                      <AgentMarkdown content={streamBuffer} />
+                    ) : (
+                      <div className="flex items-center gap-2 py-1 text-sm text-slate-500 dark:text-slate-400">
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
+                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
+                        正在整理最终回复
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} className="h-4" />
+          </div>
+        </div>
+
+        <div className="shrink-0 bg-white/80 p-4 backdrop-blur dark:bg-slate-900/80">
+          <div className="mx-auto w-full max-w-[72rem]">
+            <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
+              <textarea
+                className="min-h-[44px] max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
+                placeholder={authToken.trim() ? inputPlaceholder : '请先登录后再使用 Agent 对话'}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                rows={3}
+              />
+              <button
+                className={`group flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white transition-all hover:bg-indigo-700 ${
+                  !canSend ? 'cursor-not-allowed opacity-50 bg-slate-400' : 'shadow-md shadow-indigo-200 dark:shadow-none'
+                }`}
+                onClick={handleSend}
+                disabled={!canSend}
+              >
+                <FiSend
+                  className={`h-4 w-4 transition-transform ${
+                    canSend ? 'group-hover:translate-x-0.5 group-hover:-translate-y-0.5' : ''
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="mt-2 text-center text-[10px] text-slate-400">
+              回车换行，点击发送。AI 可能会生成错误信息，请核对重要事实
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+
+  if (isPanelOnly) {
+    return renderAgentPanel();
+  }
+
   return (
     <div className="relative isolate h-[calc(100vh-80px)] overflow-hidden px-3 pb-0">
       <section className="mx-auto mt-1 flex h-full max-w-[108rem] flex-col overflow-hidden rounded-3xl border border-white/60 bg-white/70 p-2 shadow-lg backdrop-blur md:p-3 dark:border-white/10 dark:bg-slate-900/80">
@@ -1446,7 +1732,7 @@ export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMo
                   {isAdminMode ? '执行进度' : '能力概览'}
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {isAdminMode ? '实时' : '用户 Agent'}
+                  {isAdminMode ? '实时' : '结算&Agent'}
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1659,9 +1945,11 @@ export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMo
                   <FiDatabase className="h-4 w-4 text-sky-500" />
                   查询范围
                 </div>
-                <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-100">
-                  {consoleBadge}
-                </span>
+                {consoleBadge ? (
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-100">
+                    {consoleBadge}
+                  </span>
+                ) : null}
               </div>
               <div className="space-y-3">
                 <div className="rounded-xl border border-slate-200/70 bg-white/80 p-4 shadow-sm dark:border-slate-800/70 dark:bg-slate-800/40">
@@ -1693,285 +1981,7 @@ export default function AgentConsole({ mode = 'admin' }: { mode?: AgentConsoleMo
             )}
           </div>
 
-          {/* 聊天交互（占 1/2，右侧全高） */}
-          <div className="flex min-h-0 min-w-0 w-full">
-            <Card className="relative h-full w-full !p-0 overflow-hidden flex flex-col bg-gradient-to-b from-sky-50 to-white shadow-xl border-none">
-              {historyOpen && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
-                  <div className="w-full max-w-md rounded-2xl border border-white/80 bg-white/90 p-5 shadow-2xl backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
-                    <div className="flex items-center justify-between">
-                      <div className="text-lg font-bold text-slate-800 dark:text-white">历史对话</div>
-                      <button
-                        onClick={closeHistory}
-                        className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
-                      >
-                        关闭
-                      </button>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <button
-                        onClick={resetChat}
-                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-200"
-                      >
-                        <FiMessageCircle className="h-3.5 w-3.5" />
-                        新对话
-                      </button>
-                      <button
-                        onClick={fetchSessions}
-                        disabled={historyLoading}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-300"
-                      >
-                        <FiRefreshCw className={`h-3.5 w-3.5 ${historyLoading ? 'animate-spin' : ''}`} />
-                        刷新
-                      </button>
-                    </div>
-                    {historyError && (
-                      <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/20 dark:text-rose-200">
-                        {historyError}
-                      </div>
-                    )}
-                    <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
-                      {historyLoading && (
-                        <div className="flex items-center justify-center py-8 text-slate-400">
-                          <FiRefreshCw className="mr-2 h-4 w-4 animate-spin" /> 加载中...
-                        </div>
-                      )}
-                      {!historyLoading && sessions.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-                          <FiMessageCircle className="mb-2 h-8 w-8 opacity-20" />
-                          <p className="text-xs">暂无历史对话</p>
-                        </div>
-                      )}
-                      {sessions.map((session) => {
-                        const updatedLabel = formatTime(session.updated_at || session.created_at);
-                        const isActive = session.session_id === sessionId;
-                        const isLoading = historyDetailLoadingId === session.session_id;
-                        const isDeleting = historyDeletingId === session.session_id;
-                        return (
-                          <div
-                            key={session.session_id}
-                            className="group flex items-center gap-2"
-                          >
-                            <button
-                              onClick={() => loadHistorySession(session)}
-                              disabled={isLoading || isDeleting}
-                              className={`flex-1 rounded-xl border px-4 py-3 text-left transition-all duration-200 ${isActive
-                                  ? 'border-indigo-200 bg-indigo-50 shadow-sm ring-1 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-900/30'
-                                  : 'border-transparent bg-slate-50 hover:bg-slate-100 hover:shadow-sm dark:bg-slate-800/50 dark:hover:bg-slate-800'
-                                }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={`text-sm font-medium ${isActive ? 'text-indigo-900 dark:text-indigo-100' : 'text-slate-700 dark:text-slate-200'}`}>
-                                  {session.title || '未命名对话'}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {isLoading ? '加载中…' : updatedLabel}
-                                </span>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deleteHistorySession(session)}
-                              disabled={isLoading || isDeleting}
-                              aria-label="删除对话"
-                              className="invisible inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:visible group-hover:opacity-100 dark:hover:bg-rose-900/30 dark:hover:text-rose-300"
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Chat Header */}
-              <div className="flex shrink-0 items-center justify-between border-b border-sky-100 bg-white/60 px-5 py-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
-                    <FiMessageCircle className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800 dark:text-white">{consoleTitle}</span>
-                    {activeSessionTitle && (
-                      <span className="text-[10px] text-slate-500 truncate max-w-[200px]">{activeSessionTitle}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={openHistory}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-indigo-600 hover:ring-indigo-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
-                  >
-                    <FiClock className="h-3.5 w-3.5" />
-                    历史
-                  </button>
-                </div>
-              </div>
-
-              {/* Chat Messages Area */}
-              <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
-                <div className="mx-auto min-w-0 w-full max-w-[72rem] space-y-8">
-                  {messages.length === 0 && !isStreaming && (
-                    <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50/70 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
-                      <div className="max-w-xl">
-                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-                          <FiMessageCircle className="h-6 w-6" />
-                        </div>
-                        <h2 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">{emptyStateTitle}</h2>
-                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{emptyStateBody}</p>
-                        <div className="mt-4 inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                          {consoleBadge}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {messages.map((msg, idx) => {
-                    const messageKey = `${msg.role}-${idx}`;
-                    const isCopied = copiedMessageKey === messageKey;
-
-                    if (msg.role === 'user') {
-                      return (
-                        <div key={messageKey} className="group flex justify-end">
-                          <div className="max-w-[78%]">
-                            <div className="rounded-3xl rounded-tr-md bg-slate-100 px-5 py-3 text-sm leading-7 text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100">
-                              <div className="whitespace-pre-wrap">{msg.text}</div>
-                            </div>
-                            <div
-                              className={`mt-2 flex justify-end pr-1 transition-opacity duration-200 ${
-                                isCopied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => void copyMessageText(msg.text, messageKey)}
-                                aria-label={isCopied ? '已复制消息' : '复制消息'}
-                                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
-                                  isCopied
-                                    ? 'text-emerald-700 dark:text-emerald-200'
-                                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
-                                }`}
-                              >
-                                {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
-                                {isCopied ? '已复制' : '复制'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={messageKey}
-                        className="group min-w-0 w-full border-b border-slate-200/70 pb-8 last:border-b-0 dark:border-slate-800/80"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                            Agent
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void copyMessageText(msg.text, messageKey)}
-                            aria-label={isCopied ? '已复制消息' : '复制消息'}
-                            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
-                              isCopied
-                                ? 'text-emerald-700 dark:text-emerald-200'
-                                : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
-                            }`}
-                          >
-                            {isCopied ? <FiCheck className="h-3.5 w-3.5" /> : <FiCopy className="h-3.5 w-3.5" />}
-                            {isCopied ? '已复制' : '复制'}
-                          </button>
-                        </div>
-
-                        <div className="mt-3 min-w-0 space-y-4">
-                          {renderTracePanel(msg.traces || [], '工具执行过程', `${messageKey}-trace`)}
-
-                          <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
-                            <AgentMarkdown content={msg.text} />
-                          </div>
-
-                          {msg.citations && msg.citations.length > 0 && (
-                            <div className="flex flex-wrap gap-2 border-t border-dashed border-slate-200 pt-3 dark:border-slate-800">
-                              {msg.citations.map((cite, i) => (
-                                <span
-                                  key={i}
-                                  className="inline-flex items-center rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:text-slate-300"
-                                >
-                                  引用 {i + 1}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Streaming State */}
-                  {isStreaming && (
-                    <div className="min-w-0 w-full border-b border-slate-200/70 pb-8 dark:border-slate-800/80">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                          Agent
-                        </div>
-                        <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                          <FiRefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          处理中
-                        </div>
-                      </div>
-
-                      <div className="mt-3 min-w-0 space-y-4">
-                        {renderTracePanel(streamTraces, '工具执行过程', 'streaming-trace', true)}
-
-                        <div className="min-h-[1.5rem] min-w-0 text-[15px] leading-7 text-slate-800 dark:text-slate-100">
-                          {streamBuffer ? (
-                            <AgentMarkdown content={streamBuffer} />
-                          ) : (
-                            <div className="flex items-center gap-2 py-1 text-sm text-slate-500 dark:text-slate-400">
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></span>
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
-                              正在整理最终回复
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} className="h-4" />
-                </div>
-              </div>
-
-              {/* Input Area */}
-              <div className="shrink-0 bg-white/80 p-4 backdrop-blur dark:bg-slate-900/80">
-                <div className="mx-auto w-full max-w-[72rem]">
-                  <div className="relative flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 dark:border-slate-700 dark:bg-slate-800 dark:focus-within:border-indigo-500 dark:focus-within:ring-indigo-900">
-                    <textarea
-                      className="min-h-[44px] max-h-40 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-100"
-                      placeholder={authToken.trim() ? inputPlaceholder : '请先登录后再使用 Agent 对话'}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      rows={3}
-                    />
-                    <button
-                      className={`group flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white transition-all hover:bg-indigo-700 ${!canSend ? 'cursor-not-allowed opacity-50 bg-slate-400' : 'shadow-md shadow-indigo-200 dark:shadow-none'
-                        }`}
-                      onClick={handleSend}
-                      disabled={!canSend}
-                    >
-                      <FiSend className={`h-4 w-4 transition-transform ${canSend ? 'group-hover:translate-x-0.5 group-hover:-translate-y-0.5' : ''}`} />
-                    </button>
-                  </div>
-                  <div className="mt-2 text-center text-[10px] text-slate-400">
-                    回车换行，点击发送。AI 可能会生成错误信息，请核对重要事实
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
+          {renderAgentPanel()}
         </div>
       </section>
 
