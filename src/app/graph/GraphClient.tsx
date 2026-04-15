@@ -199,7 +199,6 @@ export default function GraphClient() {
                 center={mapCenter}
                 zoom={mapZoom}
                 maxZoom={8}
-                disablePanning
                 filterZoomEvent={() => false}
               >
                 <Geographies geography={GEO_URL}>
