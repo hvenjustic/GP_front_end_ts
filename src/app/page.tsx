@@ -43,7 +43,7 @@ const tracks = [
   {
     title: '查询与 Agent 分析',
     icon: FiMessageCircle,
-    points: ['按产品关键词匹配企业', 'SSE 对话与工具 trace 回放', '结果页、图谱页、地图页联动展示']
+    points: ['按产品关键词匹配企业', 'SSE 对话与工具 trace 回放', '结果页、图谱页、情报监控页联动展示']
   }
 ];
 
@@ -97,7 +97,7 @@ export default function Home() {
                 生物制造知识图谱自动构建与分析平台。
               </h1>
               <p className="max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-                这是毕业设计的前端展示层，围绕企业官网采集、图谱抽取、图谱可视化、地理分布和 Agent 对话构建完整演示链路。
+                这是毕业设计的前端展示层，围绕企业官网采集、图谱抽取、图谱可视化、情报监控和 Agent 对话构建完整演示链路。
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

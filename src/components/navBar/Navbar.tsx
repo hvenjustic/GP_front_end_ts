@@ -43,7 +43,7 @@ import {
 
 const navLinks = [
   { href: '/', label: '首页' },
-  { href: '/graph/', label: '地理分布' },
+  { href: '/graph/', label: '情报监控' },
   { href: '/products/', label: '产品实体' },
   { href: '/agent/', label: 'Agent', adminOnly: true },
   { href: '/result/', label: '结果列表', adminOnly: true },
