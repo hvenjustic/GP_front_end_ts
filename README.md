@@ -19,8 +19,8 @@
 ## 开发运行
 1. Node.js 22（`.nvmrc` 可 `nvm use`）。
 2. 安装依赖：`npm install`。
-3. 启动开发：`npm run dev`（默认 3000）。
+3. 启动开发：`npm run dev`（默认 3031）。
 
 ## 接口配置
-- 后端地址通过环境变量 `NEXT_PUBLIC_PY_API` 配置，默认 `http://localhost:8000`。
+- 后端地址通过环境变量 `NEXT_PUBLIC_PY_API` 配置，默认 `http://localhost:8031`。
 - 统一配置文件：`src/config/api.ts`。
